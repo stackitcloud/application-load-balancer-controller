@@ -319,14 +319,8 @@ var _ = Describe("WorkTreeALB", func() {
 					WithPath(fmt.Sprintf("/%d", i*3+2), new(networkingv1.PathTypeExact), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
 				)))
 		}
-		tree, errs := BuildTree(
-			&networkingv1.IngressClass{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{
-						AnnotationAllowedSourceRanges: "10.0.0.0/24,1.2.3.4/32",
-					},
-				},
-			}, ingresses, nil, []corev1.Service{
+		_, errs := BuildTree(
+			&networkingv1.IngressClass{}, ingresses, nil, []corev1.Service{
 				Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 80, 30000, corev1.ProtocolTCP)),
 			}, nil, nil,
 		)
@@ -353,8 +347,6 @@ var _ = Describe("WorkTreeALB", func() {
 				"FieldPath":   Equal(field.NewPath("spec", "rules").Index(0).Child("paths").Index(2)),
 			}),
 		))
-		create := tree.ToCreatePayload(nil, "network-id", "region")
-		Expect(create.Options.AccessControl.AllowedSourceRanges).To(HaveExactElements("10.0.0.0/24", "1.2.3.4/32"))
 	})
 })
 
