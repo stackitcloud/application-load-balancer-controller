@@ -2,12 +2,13 @@
 # Options are set to exit when a recipe line exits non-zero or a piped command fails.
 SHELL 						= /usr/bin/env bash -o pipefail
 .SHELLFLAGS 				= -ec
+NAME 						:= application-load-balancer-controller
 export REPO                 := ghcr.io/stackitcloud
 VERSION 					?= $(shell git describe --dirty --tags --match='v*' 2>/dev/null || git rev-parse --short HEAD)
 export TAG                  := $(VERSION)
 IS_DEV                      ?= true
 ifeq ($(IS_DEV),true)
-REPO_POSTFIX                := -dev
+REPO_POSTFIX                := dev
 endif
 
 .PHONY: all
@@ -21,11 +22,11 @@ export PUSH ?= false
 
 .PHONY: images
 images: $(KO)
-	KO_DOCKER_REPO=$(REPO)$(REPO_POSTFIX) $(KO) build --push=$(PUSH) \
+	KO_DOCKER_REPO=$(REPO)/$(NAME)-$(REPO_POSTFIX) $(KO) build --push=$(PUSH) \
 		--image-label org.opencontainers.image.source="https://github.com/stackitcloud/application-load-balancer-controller" \
-		--sbom none -t $(TAG) --base-import-paths \
+		--sbom none -t $(TAG) --bare \
 		--platform linux/amd64,linux/arm64 \
-		./cmd/application-load-balancer-controller
+		./cmd/$(NAME)
 
 .PHONY: clean-tools-bin
 clean-tools-bin: ## Empty the tools binary directory.
