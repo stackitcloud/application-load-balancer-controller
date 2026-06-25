@@ -309,6 +309,22 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(create.Options.AccessControl.AllowedSourceRanges).To(HaveExactElements("10.0.0.0/24", "1.2.3.4/32"))
 	})
 
+	It("should set ALB to internal if annotation is true", func() {
+		tree, errs := BuildTree(
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationInternal: "true",
+					},
+				},
+			}, nil, nil, nil, nil, nil,
+		)
+
+		Expect(errs).To(BeEmpty())
+		create := tree.ToCreatePayload(nil, "network-id", "region")
+		Expect(create.Options.PrivateNetworkOnly).To(HaveValue(BeTrue()))
+	})
+
 	It("should return errors for paths that exceed the target pool limit", func() {
 		ingresses := []networkingv1.Ingress{}
 		for i := range 8 { // 8 * 3 paths = 24
