@@ -1,4 +1,4 @@
-package labels
+package spec
 
 import (
 	"regexp"
@@ -17,7 +17,7 @@ const (
 // Replace non-alphanumeric characters (except '-', '_', '.') with '-'
 var reg = regexp.MustCompile(`[^-a-zA-Z0-9_.]+`)
 
-func Sanitize(input string) string {
+func SanitizeLabelValue(input string) string {
 	sanitized := reg.ReplaceAllString(input, "-")
 
 	// Ensure the label starts and ends with an alphanumeric character
