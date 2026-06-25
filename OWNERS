@@ -1,0 +1,8 @@
+# See the OWNERS docs at https://go.k8s.io/owners
+
+reviewers:
+  - application-load-balancer-controller-reviewers
+  - application-load-balancer-controller-approvers
+
+approvers:
+  - application-load-balancer-controller-approvers

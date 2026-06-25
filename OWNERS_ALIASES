@@ -1,0 +1,22 @@
+aliases:
+  application-load-balancer-controller-reviewers:
+    - einfachnuralex
+    - hown3d
+    - JuliusSte
+    - Kumm-Kai
+    - maboehm
+    - MichaelEischer
+    - RAPSNX
+    - robinschneider
+    - timebertt
+    - lukasjarosch
+    - crigertg
+    - cerealsnow
+    - jastBytes
+  application-load-balancer-controller-approvers:
+    - dergeberl
+    - nschad
+    - ftl
+    - xoxys
+    - aniruddha2000
+    - breuerfelix
