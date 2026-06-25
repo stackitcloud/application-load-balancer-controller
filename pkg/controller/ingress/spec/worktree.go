@@ -136,7 +136,6 @@ func BuildTree(
 
 	errors = append(errors, addAccessControlToTree(tree, ingressClass)...)
 
-	// TODO: Explain sorting
 	slices.SortFunc(ingresses, func(a, b networkingv1.Ingress) int {
 		if diff := GetAnnotation(AnnotationPriority, 0, &a) - GetAnnotation(AnnotationPriority, 0, &b); diff != 0 {
 			return diff
@@ -149,7 +148,6 @@ func BuildTree(
 	})
 	for _, ingress := range ingresses {
 		for tlsIndex, tls := range ingress.Spec.TLS {
-			// TODO: document that the host field is completely ignored
 			secret, exists := secretsMap[types.NamespacedName{Namespace: ingress.Namespace, Name: tls.SecretName}]
 			if !exists {
 				errors = append(errors, ErrorEvent{

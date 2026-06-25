@@ -69,9 +69,6 @@ const (
 // For int and bool Atoi and ParseBool are called respectively.
 // If parsing fails or T is any other type, defaultValue is returned.
 // Only the latest found value is parsed.
-//
-// TODO: Return parser errors?!
-// TODO: Allow unsetting a value by setting the annotation to an empty string?!
 func GetAnnotation[T any](annotation string, defaultValue T, objects ...client.Object) T {
 	var rawVal string
 	var found bool
