@@ -274,7 +274,6 @@ func addPathToTree(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass, i
 			path:                 _pathWithType,
 			ingressPathReference: ingressPathReference,
 		}
-		// TODO: check limits
 	}
 	albPath.websocket = GetAnnotation(AnnotationWebSocket, false, ingress, ingressClass)
 
