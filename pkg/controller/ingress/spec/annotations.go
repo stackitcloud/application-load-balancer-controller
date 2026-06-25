@@ -55,9 +55,6 @@ const (
 	// Can be set on IngressClass and Ingress.
 	AnnotationPriority = "alb.stackit.cloud/priority"
 
-	// TODO:
-	AnnotationIngressClassName = "kubernetes.io/ingress.class"
-
 	// TODO: source ACL
 )
 
