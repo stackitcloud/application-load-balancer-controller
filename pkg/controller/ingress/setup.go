@@ -6,17 +6,21 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 const (
 	// fieldIndexIngressClass indexes the ingress class on an ingress.
 	fieldIndexIngressClass = ".spec.ingressClassName"
+	// fieldIndexService indexes a service reference on an ingress.
+	fieldIndexService = ".spec.rules.http.paths.backend.service.name"
 )
 
 // SetupWithManager sets up the controller with the Manager.
@@ -29,6 +33,27 @@ func (r *IngressClassReconciler) SetupWithManager(ctx context.Context, mgr ctrl.
 		return []string{*ingress.Spec.IngressClassName}
 	})
 
+	mgr.GetCache().IndexField(ctx, &networkingv1.Ingress{}, fieldIndexService, func(o client.Object) []string {
+		ingress := o.(*networkingv1.Ingress)
+		refs := []string{}
+		if ingress.Spec.DefaultBackend != nil && ingress.Spec.DefaultBackend.Service.Name != "" {
+			refs = append(refs, ingress.Spec.DefaultBackend.Service.Name)
+		}
+		for i := range ingress.Spec.Rules {
+			rule := &ingress.Spec.Rules[i]
+			if rule.HTTP == nil {
+				continue
+			}
+			for j := range rule.HTTP.Paths {
+				path := &rule.HTTP.Paths[j]
+				if path.Backend.Service != nil && path.Backend.Service.Name != "" {
+					refs = append(refs, path.Backend.Service.Name)
+				}
+			}
+		}
+		return refs
+	})
+
 	if ctrlName == "" {
 		ctrlName = "ingressclass"
 	}
@@ -38,7 +63,7 @@ func (r *IngressClassReconciler) SetupWithManager(ctx context.Context, mgr ctrl.
 		Watches(&corev1.Node{}, nodeEventHandler(r.Client), builder.WithPredicates(nodePredicate())).
 		Watches(&networkingv1.Ingress{}, ingressEventHandler(r.Client)).
 		Watches(&corev1.Secret{}, secretEventHandler(r.Client)).
-		// TODO: Services are missing
+		Watches(&corev1.Service{}, serviceEventHandler(r.Client)).
 		Named(ctrlName).
 		Complete(r)
 }
@@ -84,6 +109,42 @@ func secretEventHandler(c client.Client) handler.EventHandler {
 		}
 
 		return requestList
+	})
+}
+
+// serviceEventHandler returns all ingress classes that have at least one ingress that reference given secret.
+func serviceEventHandler(c client.Client) handler.EventHandler {
+	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o client.Object) []ctrl.Request {
+		service, ok := o.(*corev1.Service)
+		if !ok {
+			return nil
+		}
+
+		ingresses := &networkingv1.IngressList{}
+		err := c.List(context.Background(), ingresses, client.InNamespace(service.Namespace), client.MatchingFields{fieldIndexService: service.Name})
+		if err != nil {
+			return nil
+		}
+
+		classes := map[string]any{}
+		for i := range ingresses.Items {
+			ingress := &ingresses.Items[i]
+			if ingress.Spec.IngressClassName != nil && *ingress.Spec.IngressClassName == "" {
+				classes[*ingress.Spec.IngressClassName] = nil
+			}
+		}
+
+		reqs := []ctrl.Request{}
+		for className := range classes {
+			class := &networkingv1.IngressClass{}
+			if err := c.Get(context.Background(), types.NamespacedName{Name: className}, class); err != nil {
+				continue
+			}
+			if class.Spec.Controller == controllerName {
+				reqs = append(reqs, reconcile.Request{NamespacedName: types.NamespacedName{Name: className}})
+			}
+		}
+		return reqs
 	})
 }
 
