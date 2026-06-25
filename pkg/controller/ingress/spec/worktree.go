@@ -36,6 +36,7 @@ type WorkTreeALB struct {
 	waf           string
 	accessControl *albsdk.LoadbalancerOptionAccessControl
 	internalLB    bool
+	externalIP    string
 
 	listeners map[int16]*workTreeListener
 	// We can already create the real type because there is nothing to merge or track.
@@ -129,6 +130,7 @@ func BuildTree(
 		planID:       GetAnnotation(AnnotationPlanID, "", ingressClass),
 		waf:          GetAnnotation(AnnotationWAFName, "", ingressClass),
 		internalLB:   GetAnnotation(AnnotationInternal, false, ingressClass),
+		externalIP:   GetAnnotation(AnnotationExternalIP, "", ingressClass),
 
 		listeners:    map[int16]*workTreeListener{},
 		targetPools:  map[ingressPathReference]*albsdk.TargetPool{},
@@ -546,6 +548,11 @@ func (t WorkTreeALB) ToCreatePayload(
 		return cmp.Compare(*a.TargetPort, *b.TargetPort)
 	})
 
+	var externalAddress *string
+	if t.externalIP != "" {
+		externalAddress = new(t.externalIP)
+	}
+
 	return &albsdk.CreateLoadBalancerPayload{
 		DisableTargetSecurityGroupAssignment: new(true), // TODO: Make this configurable via flag
 		Name:                                 new(fmt.Sprintf("k8s-ingress-%s", t.ingressClass.UID)),
@@ -560,8 +567,9 @@ func (t WorkTreeALB) ToCreatePayload(
 				Role:      new("ROLE_LISTENERS_AND_TARGETS"),
 			},
 		},
+		ExternalAddress: externalAddress,
 		Options: &albsdk.LoadBalancerOptions{
-			EphemeralAddress:   new(true),
+			EphemeralAddress:   new(t.externalIP == ""),
 			AccessControl:      t.accessControl,
 			PrivateNetworkOnly: new(t.internalLB),
 			// TODO:
