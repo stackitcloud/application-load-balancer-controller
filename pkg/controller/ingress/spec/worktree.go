@@ -35,6 +35,7 @@ type WorkTreeALB struct {
 	planID        string
 	waf           string
 	accessControl *albsdk.LoadbalancerOptionAccessControl
+	internalLB    bool
 
 	listeners map[int16]*workTreeListener
 	// We can already create the real type because there is nothing to merge or track.
@@ -127,6 +128,7 @@ func BuildTree(
 		ingressClass: ingressClass,
 		planID:       GetAnnotation(AnnotationPlanID, "", ingressClass),
 		waf:          GetAnnotation(AnnotationWAFName, "", ingressClass),
+		internalLB:   GetAnnotation(AnnotationInternal, false, ingressClass),
 
 		listeners:    map[int16]*workTreeListener{},
 		targetPools:  map[ingressPathReference]*albsdk.TargetPool{},
@@ -559,8 +561,9 @@ func (t WorkTreeALB) ToCreatePayload(
 			},
 		},
 		Options: &albsdk.LoadBalancerOptions{
-			EphemeralAddress: new(true),
-			AccessControl:    t.accessControl,
+			EphemeralAddress:   new(true),
+			AccessControl:      t.accessControl,
+			PrivateNetworkOnly: new(t.internalLB),
 			// TODO:
 		},
 		PlanId:      &t.planID,
