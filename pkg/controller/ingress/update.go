@@ -81,10 +81,10 @@ func (r *IngressClassReconciler) applyALB(ctx context.Context, ingressClass *net
 	missingCertificates := tree.GetMissingCertificates(ingressClassCertificates)
 	for fingerprint, c := range missingCertificates {
 		createCertificatePayload := &certsdk.CreateCertificatePayload{
-			Name:       new(string("alb-cert")), // TODO: Add some identifying prefix and shorten it to 63 characters
+			Name:       new("alb-cert"), // TODO: Add some identifying prefix and shorten it to 63 characters
 			ProjectId:  &r.ALBConfig.Global.ProjectID,
-			PrivateKey: new(string(c.PrivateKey)),
-			PublicKey:  new(string(c.PublicKey)),
+			PrivateKey: new(c.PrivateKey),
+			PublicKey:  new(c.PublicKey),
 			Labels: &map[string]string{
 				labels.LabelIngressClassUID: string(ingressClass.UID),
 			},

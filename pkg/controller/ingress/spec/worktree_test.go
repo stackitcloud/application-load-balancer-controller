@@ -8,7 +8,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var _ = Describe("WorkTreeALB", func() {
@@ -35,7 +35,7 @@ var _ = Describe("WorkTreeALB", func() {
 		}, nil, []corev1.Service{
 			Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 1337, 30000, corev1.ProtocolTCP)),
 		}, nil, nil)
-		Expect(errs).To(HaveLen(0))
+		Expect(errs).To(BeEmpty())
 		createPayload := tree.ToCreatePayload(nil, "", "")
 		Expect(createPayload.Listeners[0].Http.Hosts[0].Host).To(HaveValue(Equal("my-host.local")))
 		Expect(createPayload.Listeners[0].Http.Hosts[0].Rules).To(HaveLen(6))
@@ -119,7 +119,7 @@ var _ = Describe("WorkTreeALB", func() {
 			},
 			[]corev1.Secret{
 				{
-					ObjectMeta: v1.ObjectMeta{Namespace: corev1.NamespaceDefault, Name: "non-tls"},
+					ObjectMeta: metav1.ObjectMeta{Namespace: corev1.NamespaceDefault, Name: "non-tls"},
 					Type:       corev1.SecretTypeDockerConfigJson, // Not TLS
 				},
 			}, nil, nil, nil,
@@ -137,7 +137,7 @@ var _ = Describe("WorkTreeALB", func() {
 			},
 			[]corev1.Secret{
 				{
-					ObjectMeta: v1.ObjectMeta{Namespace: corev1.NamespaceDefault, Name: "non-tls"},
+					ObjectMeta: metav1.ObjectMeta{Namespace: corev1.NamespaceDefault, Name: "non-tls"},
 					Type:       corev1.SecretTypeDockerConfigJson, // Not TLS
 				},
 			}, nil, nil, nil,
@@ -155,7 +155,7 @@ var _ = Describe("WorkTreeALB", func() {
 			},
 			[]corev1.Secret{
 				{
-					ObjectMeta: v1.ObjectMeta{Namespace: corev1.NamespaceDefault, Name: "invalid-tls"},
+					ObjectMeta: metav1.ObjectMeta{Namespace: corev1.NamespaceDefault, Name: "invalid-tls"},
 					Type:       corev1.SecretTypeTLS,
 					Data: map[string][]byte{
 						corev1.TLSCertKey:       []byte("invalid cert"),
@@ -177,7 +177,7 @@ var _ = Describe("WorkTreeALB", func() {
 			},
 			[]corev1.Secret{
 				{
-					ObjectMeta: v1.ObjectMeta{Namespace: corev1.NamespaceDefault, Name: "my-tls"},
+					ObjectMeta: metav1.ObjectMeta{Namespace: corev1.NamespaceDefault, Name: "my-tls"},
 					Type:       corev1.SecretTypeTLS,
 					Data: map[string][]byte{
 						corev1.TLSCertKey:       []byte(fixtureTLSPublicKey),
@@ -187,7 +187,7 @@ var _ = Describe("WorkTreeALB", func() {
 			}, nil, nil, nil,
 		)
 
-		Expect(errs).To(HaveLen(0))
+		Expect(errs).To(BeEmpty())
 		Expect(tree.GetMissingCertificates(nil)).To(ConsistOf(
 			WorkTreeCertificate{
 				PublicKey:  fixtureTLSPublicKey,
@@ -199,7 +199,7 @@ var _ = Describe("WorkTreeALB", func() {
 	It("should enable websocket if enable on ingress class", func() {
 		tree, errs := BuildTree(
 			&networkingv1.IngressClass{
-				ObjectMeta: v1.ObjectMeta{
+				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
 						AnnotationWebSocket: "true",
 					},
@@ -219,7 +219,7 @@ var _ = Describe("WorkTreeALB", func() {
 			}, nil, nil,
 		)
 
-		Expect(errs).To(HaveLen(0))
+		Expect(errs).To(BeEmpty())
 		create := tree.ToCreatePayload(nil, "network-id", "region")
 		Expect(create.Listeners).To(HaveLen(1))
 		Expect(create.Listeners[0].Http.Hosts).To(HaveLen(1))
@@ -247,7 +247,7 @@ var _ = Describe("WorkTreeALB", func() {
 			}, nil, nil,
 		)
 
-		Expect(errs).To(HaveLen(0))
+		Expect(errs).To(BeEmpty())
 		create := tree.ToCreatePayload(nil, "network-id", "region")
 		Expect(create.Listeners).To(HaveLen(1))
 		Expect(create.Listeners[0].Http.Hosts).To(HaveLen(1))
@@ -261,7 +261,7 @@ var _ = Describe("WorkTreeALB", func() {
 	It("should set WAF on all ports if specified on ingress class", func() {
 		tree, errs := BuildTree(
 			&networkingv1.IngressClass{
-				ObjectMeta: v1.ObjectMeta{
+				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
 						AnnotationWAFName: "my-waf",
 					},
@@ -281,7 +281,7 @@ var _ = Describe("WorkTreeALB", func() {
 			}, nil, nil,
 		)
 
-		Expect(errs).To(HaveLen(0))
+		Expect(errs).To(BeEmpty())
 		create := tree.ToCreatePayload(nil, "network-id", "region")
 		Expect(create.Listeners).To(HaveLen(2))
 		Expect(create.Listeners[0].WafConfigName).To(HaveValue(Equal("my-waf")))

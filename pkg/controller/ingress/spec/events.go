@@ -10,20 +10,20 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type errorEvent struct {
+type ErrorEvent struct {
 	ingress     client.Object
 	description string
 	fieldPath   *field.Path
 }
 
-func (e *errorEvent) Error() string {
+func (e *ErrorEvent) Error() string {
 	if e.fieldPath != nil {
 		return fmt.Sprintf("%s: %s", e.fieldPath.String(), e.description)
 	}
 	return e.description
 }
 
-func (e *errorEvent) RecordEvent(class *networkingv1.IngressClass, recorder record.EventRecorder) {
+func (e *ErrorEvent) RecordEvent(class *networkingv1.IngressClass, recorder record.EventRecorder) {
 	if e.ingress.GetName() == "" {
 		return
 	}

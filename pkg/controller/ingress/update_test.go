@@ -46,12 +46,12 @@ func Test_updateNeeded(t *testing.T) {
 			name: "waf config changed",
 			current: &albsdk.LoadBalancer{
 				Listeners: []albsdk.Listener{
-					{WafConfigName: ptr.To("waf-1")},
+					{WafConfigName: new("waf-1")},
 				},
 			},
 			desired: &albsdk.UpdateLoadBalancerPayload{
 				Listeners: []albsdk.Listener{
-					{WafConfigName: ptr.To("waf-2")},
+					{WafConfigName: new("waf-2")},
 				},
 			},
 			expected: true,
@@ -65,7 +65,7 @@ func Test_updateNeeded(t *testing.T) {
 							Hosts: []albsdk.HostConfig{
 								{
 									Rules: []albsdk.Rule{
-										{Path: &albsdk.Path{Prefix: ptr.To("/api")}},
+										{Path: &albsdk.Path{Prefix: new("/api")}},
 									},
 								},
 							},
@@ -80,7 +80,7 @@ func Test_updateNeeded(t *testing.T) {
 							Hosts: []albsdk.HostConfig{
 								{
 									Rules: []albsdk.Rule{
-										{Path: &albsdk.Path{Prefix: ptr.To("/v2")}},
+										{Path: &albsdk.Path{Prefix: new("/v2")}},
 									},
 								},
 							},
@@ -99,7 +99,7 @@ func Test_updateNeeded(t *testing.T) {
 							Hosts: []albsdk.HostConfig{
 								{
 									Rules: []albsdk.Rule{
-										{Path: &albsdk.Path{ExactMatch: ptr.To("/api")}},
+										{Path: &albsdk.Path{ExactMatch: new("/api")}},
 									},
 								},
 							},
@@ -114,7 +114,7 @@ func Test_updateNeeded(t *testing.T) {
 							Hosts: []albsdk.HostConfig{
 								{
 									Rules: []albsdk.Rule{
-										{Path: &albsdk.Path{ExactMatch: ptr.To("/v2")}},
+										{Path: &albsdk.Path{ExactMatch: new("/v2")}},
 									},
 								},
 							},
@@ -133,7 +133,7 @@ func Test_updateNeeded(t *testing.T) {
 							Hosts: []albsdk.HostConfig{
 								{
 									Rules: []albsdk.Rule{
-										{WebSocket: ptr.To(false)},
+										{WebSocket: new(false)},
 									},
 								},
 							},
@@ -148,7 +148,7 @@ func Test_updateNeeded(t *testing.T) {
 							Hosts: []albsdk.HostConfig{
 								{
 									Rules: []albsdk.Rule{
-										{WebSocket: ptr.To(true)},
+										{WebSocket: new(true)},
 									},
 								},
 							},
@@ -204,7 +204,7 @@ func Test_updateNeeded(t *testing.T) {
 				TargetPools: []albsdk.TargetPool{
 					{
 						TlsConfig: &albsdk.TlsConfig{
-							SkipCertificateValidation: ptr.To(false),
+							SkipCertificateValidation: new(false),
 						},
 					},
 				},
@@ -213,7 +213,7 @@ func Test_updateNeeded(t *testing.T) {
 				TargetPools: []albsdk.TargetPool{
 					{
 						TlsConfig: &albsdk.TlsConfig{
-							SkipCertificateValidation: ptr.To(true),
+							SkipCertificateValidation: new(true),
 						},
 					},
 				},
