@@ -287,6 +287,22 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(create.Listeners[0].WafConfigName).To(HaveValue(Equal("my-waf")))
 		Expect(create.Listeners[1].WafConfigName).To(HaveValue(Equal("my-waf")))
 	})
+
+	It("should set allowed source range on all ports if specified on ingress class", func() {
+		tree, errs := BuildTree(
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationAllowedSourceRanges: "10.0.0.0/24,1.2.3.4/32",
+					},
+				},
+			}, nil, nil, nil, nil, nil,
+		)
+
+		Expect(errs).To(BeEmpty())
+		create := tree.ToCreatePayload(nil, "network-id", "region")
+		Expect(create.Options.AccessControl.AllowedSourceRanges).To(HaveExactElements("10.0.0.0/24", "1.2.3.4/32"))
+	})
 })
 
 const (

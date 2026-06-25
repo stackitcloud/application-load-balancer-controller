@@ -9,6 +9,7 @@ import (
 	"maps"
 	"slices"
 	"strconv"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -30,9 +31,10 @@ type CertificateFingerprint string
 //
 // Look at the methods how a work tree can be used.
 type WorkTreeALB struct {
-	ingressClass *networkingv1.IngressClass
-	planID       string
-	waf          string
+	ingressClass  *networkingv1.IngressClass
+	planID        string
+	waf           string
+	accessControl *albsdk.LoadbalancerOptionAccessControl
 
 	listeners map[int16]*workTreeListener
 	// We can already create the real type because there is nothing to merge or track.
@@ -132,6 +134,8 @@ func BuildTree(
 		certificates: map[CertificateFingerprint]WorkTreeCertificate{},
 	}
 
+	errors = append(errors, addAccessControlToTree(tree, ingressClass)...)
+
 	// TODO: Explain sorting
 	slices.SortFunc(ingresses, func(a, b networkingv1.Ingress) int {
 		if diff := GetAnnotation(AnnotationPriority, 0, &a) - GetAnnotation(AnnotationPriority, 0, &b); diff != 0 {
@@ -213,6 +217,18 @@ func BuildTree(
 	}
 
 	return tree, errors
+}
+
+func addAccessControlToTree(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass) []ErrorEvent {
+	annotation := GetAnnotation(AnnotationAllowedSourceRanges, "", ingressClass)
+	if annotation == "" {
+		return nil
+	}
+	ranges := strings.Split(annotation, ",")
+	tree.accessControl = &albsdk.LoadbalancerOptionAccessControl{
+		AllowedSourceRanges: ranges,
+	}
+	return nil
 }
 
 // addPathToTree adds the given path to tree under the given port and protocol.
@@ -541,6 +557,7 @@ func (t WorkTreeALB) ToCreatePayload(
 		},
 		Options: &albsdk.LoadBalancerOptions{
 			EphemeralAddress: new(true),
+			AccessControl:    t.accessControl,
 			// TODO:
 		},
 		PlanId:      &t.planID,
