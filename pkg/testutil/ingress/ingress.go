@@ -2,14 +2,14 @@ package ingress
 
 import (
 	networkingv1 "k8s.io/api/networking/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
 
 // Ingress constructs an ingress for testing purposes.
 func Ingress(namespace, name string, opts ...IngressOption) networkingv1.Ingress {
 	i := networkingv1.Ingress{
-		ObjectMeta: v1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Namespace:   namespace,
 			Name:        name,
 			Annotations: map[string]string{},
@@ -49,7 +49,7 @@ func WithAnnotation(key, value string) IngressOption {
 	})
 }
 
-func WithTLSSecret(secretName string) ingressOptionFunc {
+func WithTLSSecret(secretName string) IngressOption {
 	return ingressOptionFunc(func(ingress *networkingv1.Ingress) {
 		ingress.Spec.TLS = append(ingress.Spec.TLS, networkingv1.IngressTLS{
 			SecretName: secretName,

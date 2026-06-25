@@ -193,11 +193,11 @@ var _ = FDescribe("IngressClassController", func() {
 			listCertificatesResponse = &atomic.Pointer[certsdk.ListCertificatesResponse]{}
 			listCertificatesResponse.Store(&certsdk.ListCertificatesResponse{Items: []certsdk.GetCertificateResponse{}})
 
-			certClient.EXPECT().ListCertificate(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, projectID, region string) (*certsdk.ListCertificatesResponse, error) {
+			certClient.EXPECT().ListCertificate(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _, _ string) (*certsdk.ListCertificatesResponse, error) {
 				return listCertificatesResponse.Load(), nil
 			}).AnyTimes()
 
-			albClient.EXPECT().GetLoadBalancer(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, projectID, region, name string) (*albsdk.LoadBalancer, error) {
+			albClient.EXPECT().GetLoadBalancer(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _, _, _ string) (*albsdk.LoadBalancer, error) {
 				lb := getLoadBalancerResponse.Load()
 				if lb == nil {
 					return nil, stackit.ErrorNotFound
@@ -229,7 +229,7 @@ var _ = FDescribe("IngressClassController", func() {
 
 		It("should create certificate and referenced in ALB", func(ctx context.Context) {
 			updateRequest := &atomic.Pointer[albsdk.UpdateLoadBalancerPayload]{}
-			certClient.EXPECT().CreateCertificate(gomock.Any(), projectID, region, gomock.Any()).DoAndReturn(func(ctx context.Context, projectID, region string, certificate *certsdk.CreateCertificatePayload) (*certsdk.GetCertificateResponse, error) {
+			certClient.EXPECT().CreateCertificate(gomock.Any(), projectID, region, gomock.Any()).DoAndReturn(func(_ context.Context, projectID, region string, certificate *certsdk.CreateCertificatePayload) (*certsdk.GetCertificateResponse, error) {
 				fingerprint, err := spec.ValidateTLSCertAndFingerprint([]byte(*certificate.PublicKey), []byte(*certificate.PrivateKey))
 				if err != nil {
 					return nil, fmt.Errorf("invalid certificate: %w", err)
@@ -247,7 +247,7 @@ var _ = FDescribe("IngressClassController", func() {
 				})
 				return &response, nil
 			}).Times(1)
-			albClient.EXPECT().UpdateLoadBalancer(gomock.Any(), projectID, region, gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, projectID, region, name string, update *albsdk.UpdateLoadBalancerPayload) (*albsdk.LoadBalancer, error) {
+			albClient.EXPECT().UpdateLoadBalancer(gomock.Any(), projectID, region, gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, projectID, region, name string, update *albsdk.UpdateLoadBalancerPayload) (*albsdk.LoadBalancer, error) {
 				response := albsdk.LoadBalancer(*update)
 				response.Version = new("version-after-update")
 				response.ExternalAddress = new("127.0.0.1")
@@ -342,36 +342,6 @@ var _ = FDescribe("IngressClassController", func() {
 	})
 
 })
-
-func testIngress(class *networkingv1.IngressClass, service *corev1.Service) *networkingv1.Ingress {
-	return &networkingv1.Ingress{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-ingress", Namespace: service.Namespace},
-		Spec: networkingv1.IngressSpec{
-			IngressClassName: new(class.Name),
-			Rules: []networkingv1.IngressRule{
-				{
-					Host: "example.com",
-					IngressRuleValue: networkingv1.IngressRuleValue{
-						HTTP: &networkingv1.HTTPIngressRuleValue{
-							Paths: []networkingv1.HTTPIngressPath{
-								{
-									Path:     "/",
-									PathType: new(networkingv1.PathTypePrefix),
-									Backend: networkingv1.IngressBackend{
-										Service: &networkingv1.IngressServiceBackend{
-											Name: service.Name,
-											Port: networkingv1.ServiceBackendPort{Number: service.Spec.Ports[0].Port},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-}
 
 // WaitUntilFinalizerAttached blocks until the controller successfully injects our tracking string
 func WaitUntilFinalizerAttached(ctx context.Context, cl client.Client, ic *networkingv1.IngressClass) {
