@@ -193,7 +193,7 @@ func BuildTree(
 				httpPort := GetAnnotation(AnnotationHTTPPort, 80, &ingress, ingressClass)
 				httpsPort := GetAnnotation(AnnotationHTTPSPort, 443, &ingress, ingressClass)
 
-				targetPool, e := buildTargetPool(tree, targets, ingress, rule, ruleIndex, path, pathIndex, servicesMap)
+				targetPool, e := buildTargetPool(tree, ingressClass, targets, ingress, rule, ruleIndex, path, pathIndex, servicesMap)
 				errors = append(errors, e...)
 				if targetPool == nil {
 					continue // If the target pool is invalid we do not add any rules.
@@ -293,7 +293,7 @@ func addPathToTree(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass, i
 //
 // This function doesn't mutate tree or any other arguments.
 // If the target pool is not valid nil is returned together with a list of errors.
-func buildTargetPool(tree *WorkTreeALB, targets []albsdk.Target, ingress networkingv1.Ingress, rule networkingv1.IngressRule, ruleIndex int, path networkingv1.HTTPIngressPath, pathIndex int, servicesMap map[types.NamespacedName]corev1.Service) (*albsdk.TargetPool, []ErrorEvent) {
+func buildTargetPool(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass, targets []albsdk.Target, ingress networkingv1.Ingress, rule networkingv1.IngressRule, ruleIndex int, path networkingv1.HTTPIngressPath, pathIndex int, servicesMap map[types.NamespacedName]corev1.Service) (*albsdk.TargetPool, []ErrorEvent) {
 	errors := []ErrorEvent{}
 
 	ingressPathReference := ingressPathReference{namespace: ingress.Namespace, name: ingress.Name, uid: string(ingress.UID), ruleIndex: ruleIndex, pathIndex: pathIndex}
@@ -356,6 +356,13 @@ func buildTargetPool(tree *WorkTreeALB, targets []albsdk.Target, ingress network
 	targetPool.Name = new(ingressPathReference.toTargetPoolName())
 	targetPool.TargetPort = new(nodePort)
 	targetPool.Targets = targets
+	targetPool.TlsConfig = &albsdk.TlsConfig{
+		Enabled:                   new(GetAnnotation(AnnotationTargetPoolTLSEnabled, false, &service, &ingress, ingressClass)),
+		SkipCertificateValidation: new(GetAnnotation(AnnotationTargetPoolTLSSkipCertificateValidation, false, &service, &ingress, ingressClass)),
+	}
+	if ca := GetAnnotation(AnnotationTargetPoolTLSCustomCa, "", &service, &ingress, ingressClass); ca != "" {
+		targetPool.TlsConfig.CustomCa = new(ca)
+	}
 	// TODO: Use TCP health checks for eTP=Cluster
 	if service.Spec.ExternalTrafficPolicy == corev1.ServiceExternalTrafficPolicyLocal {
 		targetPool.ActiveHealthCheck = &albsdk.ActiveHealthCheck{
@@ -544,7 +551,7 @@ func (t WorkTreeALB) ToCreatePayload(
 		targetPools = append(targetPools, *targetPool)
 	}
 	slices.SortFunc(targetPools, func(a, b albsdk.TargetPool) int {
-		return cmp.Compare(*a.TargetPort, *b.TargetPort)
+		return cmp.Compare(*a.Name, *b.Name)
 	})
 
 	var externalAddress *string
