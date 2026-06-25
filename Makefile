@@ -25,7 +25,7 @@ images: $(KO)
 		--image-label org.opencontainers.image.source="https://github.com/stackitcloud/application-load-balancer-controller" \
 		--sbom none -t $(TAG) --base-import-paths \
 		--platform linux/amd64,linux/arm64 \
-		./cmd/stackit-alb-ctrl
+		./cmd/application-load-balancer-controller
 
 .PHONY: clean-tools-bin
 clean-tools-bin: ## Empty the tools binary directory.
