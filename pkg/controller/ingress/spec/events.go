@@ -11,23 +11,23 @@ import (
 )
 
 type ErrorEvent struct {
-	ingress     client.Object
-	description string
-	fieldPath   *field.Path
+	Ingress     client.Object
+	Description string
+	FieldPath   *field.Path
 }
 
 func (e *ErrorEvent) Error() string {
-	if e.fieldPath != nil {
-		return fmt.Sprintf("%s: %s", e.fieldPath.String(), e.description)
+	if e.FieldPath != nil {
+		return fmt.Sprintf("%s: %s", e.FieldPath.String(), e.Description)
 	}
-	return e.description
+	return e.Description
 }
 
 func (e *ErrorEvent) RecordEvent(class *networkingv1.IngressClass, recorder record.EventRecorder) {
-	if e.ingress.GetName() == "" {
+	if e.Ingress.GetName() == "" {
 		return
 	}
 
-	recorder.Eventf(class, corev1.EventTypeWarning, "IngressWarning", "Error in %s in Namespace %s: %s", e.ingress.GetName(), e.ingress.GetNamespace(), e.Error())
-	recorder.Event(e.ingress, corev1.EventTypeWarning, "IngressWarning", e.Error())
+	recorder.Eventf(class, corev1.EventTypeWarning, "IngressWarning", "Error in %s in Namespace %s: %s", e.Ingress.GetName(), e.Ingress.GetNamespace(), e.Error())
+	recorder.Event(e.Ingress, corev1.EventTypeWarning, "IngressWarning", e.Error())
 }

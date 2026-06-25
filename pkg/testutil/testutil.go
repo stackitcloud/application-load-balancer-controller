@@ -25,3 +25,10 @@ func HaveAtomicValue[T any](matcher types.GomegaMatcher) types.GomegaMatcher {
 		return t
 	}, matcher)
 }
+
+// HaveName expects a Kubernetes resource to have the given name.
+func HaveName(name string) types.GomegaMatcher {
+	return WithTransform(func(o client.Object) string {
+		return o.GetName()
+	}, Equal(name))
+}
