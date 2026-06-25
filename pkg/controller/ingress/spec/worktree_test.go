@@ -1,14 +1,19 @@
 package spec
 
 import (
+	"fmt"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	. "github.com/onsi/gomega/gstruct"
+	"github.com/stackitcloud/application-load-balancer-controller/pkg/testutil"
 	. "github.com/stackitcloud/application-load-balancer-controller/pkg/testutil/ingress"
 	. "github.com/stackitcloud/application-load-balancer-controller/pkg/testutil/service"
 
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
 var _ = Describe("WorkTreeALB", func() {
@@ -108,7 +113,7 @@ var _ = Describe("WorkTreeALB", func() {
 		)
 
 		Expect(errs).To(HaveLen(1))
-		Expect(errs[0].description).To(Equal("TLS secret doesn't exist"))
+		Expect(errs[0].Description).To(Equal("TLS secret doesn't exist"))
 	})
 
 	It("should return an error when the TLS secret isn't of type TLS", func() {
@@ -126,7 +131,7 @@ var _ = Describe("WorkTreeALB", func() {
 		)
 
 		Expect(errs).To(HaveLen(1))
-		Expect(errs[0].description).To(Equal("TLS secret isn't of type kubernetes.io/tls"))
+		Expect(errs[0].Description).To(Equal("TLS secret isn't of type kubernetes.io/tls"))
 	})
 
 	It("should return an error when the TLS secret isn't of type TLS", func() {
@@ -144,7 +149,7 @@ var _ = Describe("WorkTreeALB", func() {
 		)
 
 		Expect(errs).To(HaveLen(1))
-		Expect(errs[0].description).To(Equal("TLS secret isn't of type kubernetes.io/tls"))
+		Expect(errs[0].Description).To(Equal("TLS secret isn't of type kubernetes.io/tls"))
 	})
 
 	It("should return an error when TLS secret parsing fails", func() {
@@ -166,7 +171,7 @@ var _ = Describe("WorkTreeALB", func() {
 		)
 
 		Expect(errs).To(HaveLen(1))
-		Expect(errs[0].description).To(Equal("invalid certificate: tls: failed to find any PEM data in certificate input"))
+		Expect(errs[0].Description).To(Equal("invalid certificate: tls: failed to find any PEM data in certificate input"))
 	})
 
 	It("should process TLS secret correctly", func() {
@@ -300,6 +305,54 @@ var _ = Describe("WorkTreeALB", func() {
 		)
 
 		Expect(errs).To(BeEmpty())
+		create := tree.ToCreatePayload(nil, "network-id", "region")
+		Expect(create.Options.AccessControl.AllowedSourceRanges).To(HaveExactElements("10.0.0.0/24", "1.2.3.4/32"))
+	})
+
+	It("should return errors for paths that exceed the target pool limit", func() {
+		ingresses := []networkingv1.Ingress{}
+		for i := range 8 { // 8 * 3 paths = 24
+			ingresses = append(ingresses, Ingress(corev1.NamespaceDefault, fmt.Sprintf("ingress-%d", i), WithAnnotation(AnnotationPriority, fmt.Sprintf("%d", i)),
+				WithRule("my-host.local",
+					WithPath(fmt.Sprintf("/%d", i*3), new(networkingv1.PathTypeExact), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
+					WithPath(fmt.Sprintf("/%d", i*3+1), new(networkingv1.PathTypeExact), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
+					WithPath(fmt.Sprintf("/%d", i*3+2), new(networkingv1.PathTypeExact), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
+				)))
+		}
+		tree, errs := BuildTree(
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationAllowedSourceRanges: "10.0.0.0/24,1.2.3.4/32",
+					},
+				},
+			}, ingresses, nil, []corev1.Service{
+				Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 80, 30000, corev1.ProtocolTCP)),
+			}, nil, nil,
+		)
+
+		Expect(errs).To(ConsistOf(
+			MatchAllFields(Fields{
+				"Ingress":     testutil.HaveName("ingress-0"),
+				"Description": Equal("Target pool limit reached. Path will be ignored."),
+				"FieldPath":   Equal(field.NewPath("spec", "rules").Index(0).Child("paths").Index(0)),
+			}),
+			MatchAllFields(Fields{
+				"Ingress":     testutil.HaveName("ingress-0"),
+				"Description": Equal("Target pool limit reached. Path will be ignored."),
+				"FieldPath":   Equal(field.NewPath("spec", "rules").Index(0).Child("paths").Index(1)),
+			}),
+			MatchAllFields(Fields{
+				"Ingress":     testutil.HaveName("ingress-0"),
+				"Description": Equal("Target pool limit reached. Path will be ignored."),
+				"FieldPath":   Equal(field.NewPath("spec", "rules").Index(0).Child("paths").Index(2)),
+			}),
+			MatchAllFields(Fields{
+				"Ingress":     testutil.HaveName("ingress-1"),
+				"Description": Equal("Target pool limit reached. Path will be ignored."),
+				"FieldPath":   Equal(field.NewPath("spec", "rules").Index(0).Child("paths").Index(2)),
+			}),
+		))
 		create := tree.ToCreatePayload(nil, "network-id", "region")
 		Expect(create.Options.AccessControl.AllowedSourceRanges).To(HaveExactElements("10.0.0.0/24", "1.2.3.4/32"))
 	})

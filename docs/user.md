@@ -188,7 +188,7 @@ Configure the STACKIT Application Load Balancer using the following annotations.
 | `alb.stackit.cloud/external-address` | String | IngressClass | Optional | Uses a specific STACKIT floating IP instead of an ephemeral one. |
 | `alb.stackit.cloud/internal` | Boolean | IngressClass | Optional | If `true`, the ALB is not exposed via a public IP. |
 | `alb.stackit.cloud/plan-id` | String | IngressClass | Optional | Sets the service plan for the ALB. |
-| `alb.stackit.cloud/priority` | Integer | Ingress | Optional | Defines the evaluation priority of the Ingress. |
+| `alb.stackit.cloud/priority` | Integer | Ingress | Optional | Defines the evaluation priority of the Ingress. Higher number takes priority. Defaults to zero. |
 | `alb.stackit.cloud/web-application-firewall-name` | String | IngressClass | Optional | Attaches a STACKIT WAF configuration to the listeners. |
 | `alb.stackit.cloud/websocket` | Boolean | IngressClass, Ingress | Optional | If `true`, enables WebSocket support for the ALB or specific paths. |
 | `alb.stackit.cloud/http-port` | Integer | Ingress | Optional | If set, specifies a custom HTTP port (Default is 80). |

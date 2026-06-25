@@ -137,7 +137,7 @@ func BuildTree(
 	errors = append(errors, addAccessControlToTree(tree, ingressClass)...)
 
 	slices.SortFunc(ingresses, func(a, b networkingv1.Ingress) int {
-		if diff := GetAnnotation(AnnotationPriority, 0, &a) - GetAnnotation(AnnotationPriority, 0, &b); diff != 0 {
+		if diff := GetAnnotation(AnnotationPriority, 0, &b) - GetAnnotation(AnnotationPriority, 0, &a); diff != 0 {
 			return diff
 		}
 		if diff := a.CreationTimestamp.Compare(b.CreationTimestamp.Time); diff != 0 {
@@ -151,17 +151,17 @@ func BuildTree(
 			secret, exists := secretsMap[types.NamespacedName{Namespace: ingress.Namespace, Name: tls.SecretName}]
 			if !exists {
 				errors = append(errors, ErrorEvent{
-					ingress:     &ingress,
-					fieldPath:   field.NewPath("spec", "tls").Index(tlsIndex).Child("secretName"),
-					description: "TLS secret doesn't exist",
+					Ingress:     &ingress,
+					FieldPath:   field.NewPath("spec", "tls").Index(tlsIndex).Child("secretName"),
+					Description: "TLS secret doesn't exist",
 				})
 				continue
 			}
 			if secret.Type != corev1.SecretTypeTLS {
 				errors = append(errors, ErrorEvent{
-					ingress:     &ingress,
-					fieldPath:   field.NewPath("spec", "tls").Index(tlsIndex).Child("secretName"),
-					description: "TLS secret isn't of type kubernetes.io/tls",
+					Ingress:     &ingress,
+					FieldPath:   field.NewPath("spec", "tls").Index(tlsIndex).Child("secretName"),
+					Description: "TLS secret isn't of type kubernetes.io/tls",
 				})
 				continue
 			}
@@ -169,9 +169,9 @@ func BuildTree(
 			fingerprint, err := ValidateTLSCertAndFingerprint(secret.Data[corev1.TLSCertKey], secret.Data[corev1.TLSPrivateKeyKey])
 			if err != nil {
 				errors = append(errors, ErrorEvent{
-					ingress:     &ingress,
-					fieldPath:   field.NewPath("spec", "tls").Index(tlsIndex).Child("secretName"),
-					description: fmt.Sprintf("invalid certificate: %s", err.Error()),
+					Ingress:     &ingress,
+					FieldPath:   field.NewPath("spec", "tls").Index(tlsIndex).Child("secretName"),
+					Description: fmt.Sprintf("invalid certificate: %s", err.Error()),
 				})
 				continue
 			}
@@ -245,9 +245,9 @@ func addPathToTree(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass, i
 	if listener.protocol != protocol {
 		// TODO: This error is redundant if the ingress contains multiple rules. Move this check "up".
 		errors = append(errors, ErrorEvent{
-			ingress:     ingress,
-			fieldPath:   field.NewPath("spec"),
-			description: fmt.Sprintf("Listener with port %d has protocol %s but ingress uses the port for %s", port, listener.protocol, protocol),
+			Ingress:     ingress,
+			FieldPath:   field.NewPath("spec"),
+			Description: fmt.Sprintf("Listener with port %d has protocol %s but ingress uses the port for %s", port, listener.protocol, protocol),
 		})
 		return false, errors
 	}
@@ -263,9 +263,9 @@ func addPathToTree(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass, i
 	albPath, exists := host.paths[_pathWithType]
 	if exists && albPath.ingressPathReference == ingressPathReference {
 		errors = append(errors, ErrorEvent{
-			ingress:     ingress,
-			fieldPath:   field.NewPath("spec", "rules", strconv.Itoa(ruleIndex), "path", strconv.Itoa(pathIndex)),
-			description: "Path already exists",
+			Ingress:     ingress,
+			FieldPath:   field.NewPath("spec", "rules", strconv.Itoa(ruleIndex), "path", strconv.Itoa(pathIndex)),
+			Description: "Path already exists",
 		})
 		return false, errors
 	}
@@ -298,7 +298,13 @@ func buildTargetPool(tree *WorkTreeALB, targets []albsdk.Target, ingress network
 
 	_, exists := tree.targetPools[ingressPathReference]
 	if !exists {
-		// TODO: check limits.
+		if len(tree.targetPools) >= LimitTargetPools {
+			errors = append(errors, ErrorEvent{
+				Ingress:     &ingress,
+				FieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("paths").Index(pathIndex),
+				Description: "Target pool limit reached. Path will be ignored.",
+			})
+		}
 	}
 	targetPool := &albsdk.TargetPool{}
 
@@ -307,17 +313,17 @@ func buildTargetPool(tree *WorkTreeALB, targets []albsdk.Target, ingress network
 	service, exists := servicesMap[types.NamespacedName{Namespace: ingress.Namespace, Name: path.Backend.Service.Name}]
 	if !exists {
 		errors = append(errors, ErrorEvent{
-			ingress:     &ingress,
-			fieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("paths").Index(pathIndex).Child("backend", "service", "name"),
-			description: "Service doesn't exist",
+			Ingress:     &ingress,
+			FieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("paths").Index(pathIndex).Child("backend", "service", "name"),
+			Description: "Service doesn't exist",
 		})
 		return nil, errors
 	}
 	if service.Spec.Type != corev1.ServiceTypeNodePort && service.Spec.Type != corev1.ServiceTypeLoadBalancer {
 		errors = append(errors, ErrorEvent{
-			ingress:     &ingress,
-			fieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("paths").Index(pathIndex).Child("backend", "service", "name"),
-			description: "Service is not of type NodePort or LoadBalancer",
+			Ingress:     &ingress,
+			FieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("paths").Index(pathIndex).Child("backend", "service", "name"),
+			Description: "Service is not of type NodePort or LoadBalancer",
 		})
 		return nil, errors
 	}
@@ -327,9 +333,9 @@ func buildTargetPool(tree *WorkTreeALB, targets []albsdk.Target, ingress network
 			port.Name == path.Backend.Service.Port.Name {
 			if port.NodePort == 0 {
 				errors = append(errors, ErrorEvent{
-					ingress:     &ingress,
-					fieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("paths").Index(pathIndex).Child("backend", "service"),
-					description: "Service port doesn't have a node port",
+					Ingress:     &ingress,
+					FieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("paths").Index(pathIndex).Child("backend", "service"),
+					Description: "Service port doesn't have a node port",
 				})
 				continue
 			}
@@ -338,9 +344,9 @@ func buildTargetPool(tree *WorkTreeALB, targets []albsdk.Target, ingress network
 	}
 	if nodePort == 0 {
 		errors = append(errors, ErrorEvent{
-			ingress:     &ingress,
-			fieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("paths").Index(pathIndex).Child("backend", "service"),
-			description: "Port not found in service",
+			Ingress:     &ingress,
+			FieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("paths").Index(pathIndex).Child("backend", "service"),
+			Description: "Port not found in service",
 		})
 		return nil, errors
 	}
