@@ -564,7 +564,6 @@ func (t WorkTreeALB) ToCreatePayload(
 		Labels: &map[string]string{
 			"ingress-class-uid": string(t.ingressClass.UID),
 		},
-		// TODO: Support static IP and promotion but not demotion
 		Listeners: listeners,
 		Networks: []albsdk.Network{
 			{
