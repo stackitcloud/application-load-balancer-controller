@@ -54,38 +54,40 @@ var _ = Describe("WorkTreeALB", func() {
 
 	It("should match rules against correct node ports", func() {
 		const host = "my-host.local"
-		tree, _ := BuildTree(&networkingv1.IngressClass{}, []networkingv1.Ingress{
+		tree, errs := BuildTree(&networkingv1.IngressClass{}, []networkingv1.Ingress{
 			Ingress(
-				"default", "ingress-to-node-port-5000",
+				"default", "ingress-to-node-port-5000", WithUID("uid-1"),
 				WithRule(host, WithPath("/5000", new(networkingv1.PathTypeExact), "service-a", networkingv1.ServiceBackendPort{Number: 1337})),
 			),
 			Ingress(
-				"default", "ingress-to-node-port-5001",
+				"default", "ingress-to-node-port-5001", WithUID("uid-2"),
 				WithRule(host, WithPath("/5001", new(networkingv1.PathTypeExact), "service-a", networkingv1.ServiceBackendPort{Name: "1338"})),
 			),
 			Ingress(
-				"default", "ingress-to-node-port-5002",
+				"default", "ingress-to-node-port-5002", WithUID("uid-3"),
 				WithRule(host, WithPath("/5002", new(networkingv1.PathTypeExact), "service-a", networkingv1.ServiceBackendPort{Number: 1339})),
 			),
 			Ingress(
-				"default", "ingress-to-node-port-5003",
+				"default", "ingress-to-node-port-5003", WithUID("uid-4"),
 				WithRule(host, WithPath("/5003", new(networkingv1.PathTypeExact), "service-b", networkingv1.ServiceBackendPort{Number: 1337})),
 			),
 		}, nil, []corev1.Service{
-			Service("default", "service-a",
+			Service("default", "service-a", WithServiceType(corev1.ServiceTypeNodePort),
 				WithPort("1337", 1337, 5000, corev1.ProtocolTCP),
 				WithPort("1338", 1338, 5001, corev1.ProtocolTCP),
 				WithPort("1339", 1339, 5002, corev1.ProtocolTCP),
 			),
-			Service("default", "service-b",
+			Service("default", "service-b", WithServiceType(corev1.ServiceTypeNodePort),
 				WithPort("1337", 1337, 5003, corev1.ProtocolTCP),
 			),
 		}, nil, nil)
+		Expect(errs).To(BeEmpty())
+
 		createPayload := tree.ToCreatePayload(nil, "", "")
 
 		Expect(createPayload.Listeners[0].Http.Hosts[0].Host).To(HaveValue(Equal(host)))
 
-		// The following assertions require that target pool are sorted by target ports.
+		// The following assertions require that target pool are sorted by the ingress UID and path.
 		Expect(createPayload.Listeners[0].Http.Hosts[0].Rules[0].Path.ExactMatch).To(HaveValue(Equal("/5000")))
 		Expect(createPayload.TargetPools[0].Name).To(Equal(createPayload.Listeners[0].Http.Hosts[0].Rules[0].TargetPool))
 		Expect(createPayload.TargetPools[0].TargetPort).To(HaveValue(Equal(int32(5000))))
@@ -380,6 +382,47 @@ var _ = Describe("WorkTreeALB", func() {
 				"FieldPath":   Equal(field.NewPath("spec", "rules").Index(0).Child("paths").Index(2)),
 			}),
 		))
+	})
+
+	It("should set target pool TLS settings", func() {
+		tree, errs := BuildTree(
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationTargetPoolTLSEnabled: "true",
+					},
+				},
+			},
+			[]networkingv1.Ingress{
+				Ingress(corev1.NamespaceDefault, "ingress-1", WithUID("uid-1"), WithRule("my-host.local",
+					WithPath("/inherit", new(networkingv1.PathTypePrefix), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
+					WithPath("/overwrite-disable-on-service", new(networkingv1.PathTypePrefix), "service-with-tls-disabled", networkingv1.ServiceBackendPort{Number: 80}),
+				)),
+				Ingress(corev1.NamespaceDefault, "ingress-2", WithUID("uid-2"), WithAnnotation(AnnotationTargetPoolTLSEnabled, "false"), WithRule("my-host.local",
+					WithPath("/overwrite-disable-on-ingress", new(networkingv1.PathTypePrefix), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
+				)),
+				Ingress(corev1.NamespaceDefault, "ingress-3", WithUID("uid-3"), WithAnnotation(AnnotationTargetPoolTLSCustomCa, "custom-ca"), WithRule("my-host.local",
+					WithPath("/custom-ca", new(networkingv1.PathTypePrefix), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
+				)),
+				Ingress(corev1.NamespaceDefault, "ingress-4", WithUID("uid-4"), WithAnnotation(AnnotationTargetPoolTLSSkipCertificateValidation, "true"), WithRule("my-host.local",
+					WithPath("/skip-validation", new(networkingv1.PathTypePrefix), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
+				)),
+			},
+			nil,
+			[]corev1.Service{
+				Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 80, 30000, corev1.ProtocolTCP)),
+				Service(corev1.NamespaceDefault, "service-with-tls-disabled", WithServiceAnnotation(AnnotationTargetPoolTLSEnabled, "false"), WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 80, 30001, corev1.ProtocolTCP)),
+			}, nil, nil,
+		)
+
+		Expect(errs).To(BeEmpty())
+		create := tree.ToCreatePayload(nil, "network-id", "region")
+		Expect(create.TargetPools).To(HaveLen(5))
+		Expect(create.TargetPools[0].TlsConfig.Enabled).To(HaveValue(BeTrue()))
+		Expect(create.TargetPools[1].TlsConfig.Enabled).To(HaveValue(BeFalse()))
+		Expect(create.TargetPools[2].TlsConfig.Enabled).To(HaveValue(BeFalse()))
+		Expect(create.TargetPools[3].TlsConfig.CustomCa).To(HaveValue(Equal("custom-ca")))
+		Expect(create.TargetPools[4].TlsConfig.SkipCertificateValidation).To(HaveValue(BeTrue()))
 	})
 })
 

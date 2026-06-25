@@ -8,8 +8,9 @@ import (
 func Service(namespace, name string, opts ...ServiceOption) corev1.Service {
 	service := corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespace,
-			Name:      name,
+			Namespace:   namespace,
+			Name:        name,
+			Annotations: map[string]string{},
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{},
@@ -45,5 +46,11 @@ func WithPort(name string, port, nodePort int32, protocol corev1.Protocol) Servi
 func WithServiceType(_type corev1.ServiceType) ServiceOption {
 	return serviceOptionFunc(func(service *corev1.Service) {
 		service.Spec.Type = _type
+	})
+}
+
+func WithServiceAnnotation(key, value string) ServiceOption {
+	return serviceOptionFunc(func(service *corev1.Service) {
+		service.Annotations[key] = value
 	})
 }
