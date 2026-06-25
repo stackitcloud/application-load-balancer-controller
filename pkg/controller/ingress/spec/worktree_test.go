@@ -325,6 +325,23 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(create.Options.PrivateNetworkOnly).To(HaveValue(BeTrue()))
 	})
 
+	It("should set ALB to static if annotation contains IP", func() {
+		tree, errs := BuildTree(
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationExternalIP: "1.2.3.4",
+					},
+				},
+			}, nil, nil, nil, nil, nil,
+		)
+
+		Expect(errs).To(BeEmpty())
+		create := tree.ToCreatePayload(nil, "network-id", "region")
+		Expect(create.ExternalAddress).To(HaveValue(Equal("1.2.3.4")))
+		Expect(create.Options.EphemeralAddress).To(HaveValue(BeFalse()))
+	})
+
 	It("should return errors for paths that exceed the target pool limit", func() {
 		ingresses := []networkingv1.Ingress{}
 		for i := range 8 { // 8 * 3 paths = 24
