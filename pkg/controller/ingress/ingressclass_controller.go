@@ -68,8 +68,8 @@ func (r *IngressClassReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, nil
 	}
 
-	if err := r.applyALB(ctx, ingressClass); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to apply ALB: %w", err)
+	if err := r.reconcileALBResources(ctx, ingressClass); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to reconcile ALB resources: %w", err)
 	}
 
 	requeue, err := r.updateStatus(ctx, ingressClass)
