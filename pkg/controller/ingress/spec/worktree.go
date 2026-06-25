@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"strconv"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -268,7 +267,7 @@ func addPathToTree(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass, i
 	if exists && albPath.ingressPathReference == ingressPathReference {
 		errors = append(errors, ErrorEvent{
 			Ingress:     ingress,
-			FieldPath:   field.NewPath("spec", "rules", strconv.Itoa(ruleIndex), "path", strconv.Itoa(pathIndex)),
+			FieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("path").Index(pathIndex),
 			Description: "Path already exists",
 		})
 		return false, errors
