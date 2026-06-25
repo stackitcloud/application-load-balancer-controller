@@ -18,7 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func (r *IngressClassReconciler) applyALB(ctx context.Context, ingressClass *networkingv1.IngressClass) error {
+func (r *IngressClassReconciler) reconcileALBResources(ctx context.Context, ingressClass *networkingv1.IngressClass) error {
 	ingresses, err := r.getIngressesForIngressClass(ctx, ingressClass)
 	if err != nil {
 		return fmt.Errorf("failed to get ingresses for class: %w", err)
@@ -70,7 +70,7 @@ func (r *IngressClassReconciler) applyALB(ctx context.Context, ingressClass *net
 	missingCertificates := tree.GetMissingCertificates(ingressClassCertificates)
 	for fingerprint, c := range missingCertificates {
 		createCertificatePayload := &certsdk.CreateCertificatePayload{
-			Name:       new("alb-cert"), // TODO: Add some identifying prefix and shorten it to 63 characters
+			Name:       new("k8s-ingress-" + string(ingressClass.UID)),
 			ProjectId:  &r.ALBConfig.Global.ProjectID,
 			PrivateKey: new(c.PrivateKey),
 			PublicKey:  new(c.PublicKey),
