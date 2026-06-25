@@ -165,12 +165,26 @@ func (r *IngressClassReconciler) handleIngressClassDeletion(
 		}
 	}
 
+	// The API returns 200 if the load balancer doesn't exist.
 	err = r.ALBClient.DeleteLoadBalancer(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region, spec.LoadBalancerName(ingressClass))
 	if err != nil {
 		return fmt.Errorf("failed to delete load balancer: %w", err)
 	}
+	ctrl.LoggerFrom(ctx).Info("Deleted load balancer")
 
-	// TODO: Delete all certificates for ingress ingress
+	// TODO: Wait for load balancer to be deleted or remove all certificates references to delete certificates without errors.
+
+	ingressClassCertificates, err := r.getCertificatesForIngressClass(ctx, ingressClass)
+	if err != nil {
+		return err
+	}
+	for i := range ingressClassCertificates {
+		cert := &ingressClassCertificates[i]
+		if err := r.CertificateClient.DeleteCertificate(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region, *cert.Id); err != nil {
+			return fmt.Errorf("failed to delete certificate %q: %w", *cert.Id, err)
+		}
+		ctrl.LoggerFrom(ctx).Info("Deleted certificate", "id", *cert.Id, "name", *cert.Name)
+	}
 
 	if controllerutil.RemoveFinalizer(ingressClass, finalizerName) {
 		err = r.Client.Update(ctx, ingressClass)
