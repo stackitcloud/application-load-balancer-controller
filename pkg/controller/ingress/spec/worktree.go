@@ -363,7 +363,7 @@ func buildTargetPool(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass,
 	if ca := GetAnnotation(AnnotationTargetPoolTLSCustomCa, "", &service, &ingress, ingressClass); ca != "" {
 		targetPool.TlsConfig.CustomCa = new(ca)
 	}
-	// TODO: Use TCP health checks for eTP=Cluster
+	// If externalTrafficPolicy=Cluster we use the default TCP health check on the node port itself.
 	if service.Spec.ExternalTrafficPolicy == corev1.ServiceExternalTrafficPolicyLocal {
 		targetPool.ActiveHealthCheck = &albsdk.ActiveHealthCheck{
 			AltPort: &service.Spec.HealthCheckNodePort,
@@ -373,10 +373,9 @@ func buildTargetPool(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass,
 			},
 			HealthyThreshold:   new(int32(1)),
 			Interval:           new("5s"),
-			IntervalJitter:     new("1s"),
-			Timeout:            new("1s"),
-			UnhealthyThreshold: new(int32(2)),
-			// TODO: Optimize interval etc.
+			IntervalJitter:     new("0s"),
+			Timeout:            new("3s"),
+			UnhealthyThreshold: new(int32(3)),
 		}
 	}
 
