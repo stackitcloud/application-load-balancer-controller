@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress/spec"
-	"github.com/stackitcloud/application-load-balancer-controller/pkg/labels"
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/stackit"
 	albsdk "github.com/stackitcloud/stackit-sdk-go/services/alb/v2api"
 	certsdk "github.com/stackitcloud/stackit-sdk-go/services/certificates/v2api"
@@ -77,7 +76,7 @@ func (r *IngressClassReconciler) applyALB(ctx context.Context, ingressClass *net
 			PrivateKey: new(c.PrivateKey),
 			PublicKey:  new(c.PublicKey),
 			Labels: &map[string]string{
-				labels.LabelIngressClassUID: string(ingressClass.UID),
+				spec.LabelIngressClassUID: string(ingressClass.UID),
 			},
 		}
 		response, err := r.CertificateClient.CreateCertificate(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region, createCertificatePayload)
@@ -221,7 +220,7 @@ func (r *IngressClassReconciler) getCertificatesForIngressClass(ctx context.Cont
 
 	ingressClassCertificates := []certsdk.GetCertificateResponse{}
 	for _, cert := range projectCertificates.Items {
-		if cert.Labels != nil && (*cert.Labels)[labels.LabelIngressClassUID] == string(ingressClass.UID) {
+		if cert.Labels != nil && (*cert.Labels)[spec.LabelIngressClassUID] == string(ingressClass.UID) {
 			ingressClassCertificates = append(ingressClassCertificates, cert)
 		}
 	}
