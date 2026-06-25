@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress/spec"
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/stackit"
@@ -226,7 +227,7 @@ func (r *IngressClassReconciler) getCertificatesForIngressClass(ctx context.Cont
 }
 
 func updateNeeded(alb *albsdk.LoadBalancer, albPayload *albsdk.UpdateLoadBalancerPayload) bool {
-	return listenersChanged(alb.Listeners, albPayload.Listeners) || targetPoolsChanged(alb.TargetPools, albPayload.TargetPools)
+	return listenersChanged(alb.Listeners, albPayload.Listeners) || targetPoolsChanged(alb.TargetPools, albPayload.TargetPools) || optionsChanged(alb.Options, albPayload.Options)
 }
 
 func listenersChanged(current, desired []albsdk.Listener) bool {
@@ -321,4 +322,13 @@ func targetPoolsChanged(current, desired []albsdk.TargetPool) bool {
 		}
 	}
 	return false
+}
+
+func optionsChanged(current, desired *albsdk.LoadBalancerOptions) bool {
+	a := ptr.Deref(ptr.Deref(current, albsdk.LoadBalancerOptions{}).AccessControl, albsdk.LoadbalancerOptionAccessControl{})
+	b := ptr.Deref(ptr.Deref(desired, albsdk.LoadBalancerOptions{}).AccessControl, albsdk.LoadbalancerOptionAccessControl{})
+	if a.AllowedSourceRanges == nil || b.AllowedSourceRanges == nil {
+		return a.AllowedSourceRanges != nil || b.AllowedSourceRanges != nil
+	}
+	return !slices.Equal(a.AllowedSourceRanges, b.AllowedSourceRanges)
 }

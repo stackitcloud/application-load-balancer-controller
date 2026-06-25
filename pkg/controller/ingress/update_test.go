@@ -220,6 +220,76 @@ func Test_updateNeeded(t *testing.T) {
 			},
 			expected: true,
 		},
+		{
+			name: "ACL added",
+			current: &albsdk.LoadBalancer{
+				Options: &albsdk.LoadBalancerOptions{
+					AccessControl: nil,
+				},
+			},
+			desired: &albsdk.UpdateLoadBalancerPayload{
+				Options: &albsdk.LoadBalancerOptions{
+					AccessControl: &albsdk.LoadbalancerOptionAccessControl{AllowedSourceRanges: []string{"1.2.3.4/32"}},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "ACL removed",
+			current: &albsdk.LoadBalancer{
+				Options: &albsdk.LoadBalancerOptions{
+					AccessControl: &albsdk.LoadbalancerOptionAccessControl{AllowedSourceRanges: []string{"1.2.3.4/32"}},
+				},
+			},
+			desired: &albsdk.UpdateLoadBalancerPayload{
+				Options: &albsdk.LoadBalancerOptions{
+					AccessControl: nil,
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "ACL changed",
+			current: &albsdk.LoadBalancer{
+				Options: &albsdk.LoadBalancerOptions{
+					AccessControl: &albsdk.LoadbalancerOptionAccessControl{AllowedSourceRanges: []string{"1.2.3.4/32"}},
+				},
+			},
+			desired: &albsdk.UpdateLoadBalancerPayload{
+				Options: &albsdk.LoadBalancerOptions{
+					AccessControl: &albsdk.LoadbalancerOptionAccessControl{AllowedSourceRanges: []string{"2.3.4.5/32"}},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "ACL unchanged",
+			current: &albsdk.LoadBalancer{
+				Options: &albsdk.LoadBalancerOptions{
+					AccessControl: &albsdk.LoadbalancerOptionAccessControl{AllowedSourceRanges: []string{"1.2.3.4/32"}},
+				},
+			},
+			desired: &albsdk.UpdateLoadBalancerPayload{
+				Options: &albsdk.LoadBalancerOptions{
+					AccessControl: &albsdk.LoadbalancerOptionAccessControl{AllowedSourceRanges: []string{"1.2.3.4/32"}},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "ACL none",
+			current: &albsdk.LoadBalancer{
+				Options: &albsdk.LoadBalancerOptions{
+					AccessControl: nil,
+				},
+			},
+			desired: &albsdk.UpdateLoadBalancerPayload{
+				Options: &albsdk.LoadBalancerOptions{
+					AccessControl: nil,
+				},
+			},
+			expected: false,
+		},
 	}
 
 	for _, tt := range tests {

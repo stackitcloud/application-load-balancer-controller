@@ -195,6 +195,7 @@ Configure the STACKIT Application Load Balancer using the following annotations.
 | `alb.stackit.cloud/traget-pool-tls-enabled` | Boolean | IngressClass, Ingress, Service | Optional | Enables TLS bridging using OS trusted CAs. |
 | `alb.stackit.cloud/traget-pool-tls-custom-ca` | String | IngressClass, Ingress, Service | Optional | Enables TLS bridging with a custom CA. |
 | `alb.stackit.cloud/traget-pool-tls-skip-certificate-validation`| Boolean | IngressClass, Ingress, Service | Optional | Enables TLS bridging but skips certificate validation. |
+| `alb.stackit.cloud/allowed-source-ranges`| String | IngressClass | Accepts a comma-separated list of IP ranges. E.g. 10.0.0.0/24,1.2.3.4/32. If unset, all IPs are allowed. |
 
 ### Known Limitations
 

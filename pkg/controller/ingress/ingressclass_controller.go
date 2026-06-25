@@ -58,7 +58,7 @@ func (r *IngressClassReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, nil
 	}
 
-	// Add finalizer to the IngressClass if not already added
+	// Add finalizer to the IngressClass if not already added.
 	if controllerutil.AddFinalizer(ingressClass, finalizerName) {
 		err := r.Client.Update(ctx, ingressClass)
 		if err != nil {
