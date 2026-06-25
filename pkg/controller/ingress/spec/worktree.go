@@ -559,7 +559,7 @@ func (t WorkTreeALB) ToCreatePayload(
 	}
 
 	return &albsdk.CreateLoadBalancerPayload{
-		DisableTargetSecurityGroupAssignment: new(true), // TODO: Make this configurable via flag
+		DisableTargetSecurityGroupAssignment: new(true), // TODO: Make this configurable via flag.
 		Name:                                 new(fmt.Sprintf("k8s-ingress-%s", t.ingressClass.UID)),
 		Labels: &map[string]string{
 			"ingress-class-uid": string(t.ingressClass.UID),
@@ -576,7 +576,6 @@ func (t WorkTreeALB) ToCreatePayload(
 			EphemeralAddress:   new(t.externalIP == ""),
 			AccessControl:      t.accessControl,
 			PrivateNetworkOnly: new(t.internalLB),
-			// TODO:
 		},
 		PlanId:      &t.planID,
 		Region:      new(region),
