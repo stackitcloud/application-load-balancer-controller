@@ -112,7 +112,7 @@ func secretEventHandler(c client.Client) handler.EventHandler {
 	})
 }
 
-// serviceEventHandler returns all ingress classes that have at least one ingress that reference given secret.
+// serviceEventHandler returns all ingress classes that have at least one ingress that references the given secret.
 func serviceEventHandler(c client.Client) handler.EventHandler {
 	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o client.Object) []ctrl.Request {
 		service, ok := o.(*corev1.Service)

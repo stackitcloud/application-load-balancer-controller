@@ -48,8 +48,7 @@ func (r *IngressClassReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, nil
 	}
 
-	// TODO: Use proper verbosity levels
-	log.V(10).Info("Reconciling IngressClass")
+	log.V(2).Info("Reconciling IngressClass")
 
 	if !ingressClass.DeletionTimestamp.IsZero() {
 		err := r.handleIngressClassDeletion(ctx, ingressClass)
@@ -78,7 +77,7 @@ func (r *IngressClassReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, fmt.Errorf("failed to update ingress status: %w", err)
 	}
 
-	log.Info("Successfully reconciled IngressClass", "Name", ingressClass.Name)
+	log.V(1).Info("Successfully reconciled IngressClass", "Name", ingressClass.Name)
 
 	return requeue, nil
 }

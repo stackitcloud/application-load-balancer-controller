@@ -215,7 +215,6 @@ var _ = Describe("IngressClassController", func() {
 				return lb, nil
 			}).AnyTimes()
 			albClient.EXPECT().CreateLoadBalancer(gomock.Any(), projectID, region, gomock.Any()).DoAndReturn(func(_ context.Context, _, _ string, create *albsdk.CreateLoadBalancerPayload) (*albsdk.LoadBalancer, error) {
-				// TODO: check name
 				response := albsdk.LoadBalancer(*create)
 				response.Version = new("version-after-create")
 				response.ExternalAddress = new("127.0.0.1")
