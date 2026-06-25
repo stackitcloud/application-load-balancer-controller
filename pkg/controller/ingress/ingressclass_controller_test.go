@@ -2,10 +2,10 @@ package ingress_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -37,7 +37,7 @@ const (
 	targetCertID   = "real-certificate-uuid-abc-123"
 )
 
-var _ = FDescribe("IngressClassController", func() {
+var _ = Describe("IngressClassController", func() {
 	var (
 		recorder *record.FakeRecorder
 
@@ -150,16 +150,25 @@ var _ = FDescribe("IngressClassController", func() {
 	})
 
 	It("should create an empty ALB for an ingress class matching the controller", func(ctx context.Context) {
+		var getLoadBalancerResponse *atomic.Pointer[albsdk.LoadBalancer] = &atomic.Pointer[albsdk.LoadBalancer]{}
 		certClient.EXPECT().ListCertificate(gomock.Any(), gomock.Any(), gomock.Any()).Return(new(certsdk.ListCertificatesResponse{
 			Items: []certsdk.GetCertificateResponse{},
 		}), nil).AnyTimes()
-		albClient.EXPECT().GetLoadBalancer(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, stackit.ErrorNotFound).AnyTimes()
-		done := make(chan any)
-		albClient.EXPECT().CreateLoadBalancer(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _, _ string, _ *albsdk.CreateLoadBalancerPayload) (*albsdk.LoadBalancer, error) {
-			// TODO: verify arguments
-			close(done)
-			return new(albsdk.LoadBalancer{}), nil
-		}).MinTimes(1) // TODO: Change to exactly once.
+		albClient.EXPECT().GetLoadBalancer(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _, _, _ string) (*albsdk.LoadBalancer, error) {
+			lb := getLoadBalancerResponse.Load()
+			if lb == nil {
+				return nil, stackit.ErrorNotFound
+			}
+			return lb, nil
+		}).AnyTimes()
+		albClient.EXPECT().CreateLoadBalancer(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _, _ string, create *albsdk.CreateLoadBalancerPayload) (*albsdk.LoadBalancer, error) {
+			response := albsdk.LoadBalancer(*create)
+			response.Version = new("version-after-create")
+			response.ExternalAddress = new("127.0.0.1")
+			response.Status = new(stackit.LBStatusReady)
+			getLoadBalancerResponse.Store(&response)
+			return &response, nil
+		}).Times(1)
 
 		ingressClass := &networkingv1.IngressClass{
 			ObjectMeta: metav1.ObjectMeta{
@@ -170,13 +179,14 @@ var _ = FDescribe("IngressClassController", func() {
 			},
 		}
 		Expect(k8sClient.Create(ctx, ingressClass)).To(Succeed())
-		DeferCleanup(func() {
+		DeferCleanup(func(ctx context.Context) {
+			albClient.EXPECT().DeleteLoadBalancer(gomock.Any(), projectID, region, spec.LoadBalancerName(ingressClass)).Times(1)
 			testutil.DeleteAndWaitForKubernetesResource(ctx, k8sClient, ingressClass)
 		})
 
 		WaitUntilFinalizerAttached(ctx, k8sClient, ingressClass)
 
-		Eventually(done).WithTimeout(5 * time.Second).Should(BeClosed())
+		Eventually(getLoadBalancerResponse).Should(testutil.HaveAtomicValue[albsdk.LoadBalancer](Not(BeNil())))
 	})
 
 	// The ALB is already created when BeforeEach completes.
@@ -223,11 +233,16 @@ var _ = FDescribe("IngressClassController", func() {
 				},
 			}
 			Expect(k8sClient.Create(ctx, ingressClass)).To(Succeed())
+			DeferCleanup(func(ctx context.Context) {
+				albClient.EXPECT().DeleteLoadBalancer(gomock.Any(), projectID, region, spec.LoadBalancerName(ingressClass)).Times(1)
+				testutil.DeleteAndWaitForKubernetesResource(ctx, k8sClient, ingressClass)
+			})
+
 			// Wait for CreateLoadBalancer to be called, i.e. getLoadBalancerResponse to not be nil.
 			Eventually(getLoadBalancerResponse).Should(testutil.HaveAtomicValue[albsdk.LoadBalancer](Not(BeNil())))
 		})
 
-		It("should create certificate and referenced in ALB", func(ctx context.Context) {
+		It("should create certificate and reference it in ALB", func(ctx context.Context) {
 			updateRequest := &atomic.Pointer[albsdk.UpdateLoadBalancerPayload]{}
 			certClient.EXPECT().CreateCertificate(gomock.Any(), projectID, region, gomock.Any()).DoAndReturn(func(_ context.Context, projectID, region string, certificate *certsdk.CreateCertificatePayload) (*certsdk.GetCertificateResponse, error) {
 				fingerprint, err := spec.ValidateTLSCertAndFingerprint([]byte(*certificate.PublicKey), []byte(*certificate.PrivateKey))
@@ -256,7 +271,7 @@ var _ = FDescribe("IngressClassController", func() {
 
 				updateRequest.Store(update)
 				return (*albsdk.LoadBalancer)(update), nil
-			}).Times(1)
+			}).MinTimes(1)
 
 			secret := corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: corev1.NamespaceDefault, Name: "my-tls-cert"},
@@ -274,10 +289,22 @@ var _ = FDescribe("IngressClassController", func() {
 			)
 			Expect(k8sClient.Create(ctx, &ingress)).To(Succeed())
 
-			Eventually(updateRequest).Should(testutil.HaveAtomicValue[albsdk.UpdateLoadBalancerPayload](Not(BeNil())))
-			update := updateRequest.Load()
-			Expect(update.Version).To(HaveValue(Equal("version-after-create")))
-			Expect(update.Listeners[1].Https.CertificateConfig.CertificateIds).To(ConsistOf("random-certificate-id"))
+			// Depending on in which order the secret and service hit the cache the first update might not yet include the certificate.
+			Eventually(updateRequest).Should(testutil.HaveAtomicValue[albsdk.UpdateLoadBalancerPayload](
+				WithTransform(func(u *albsdk.UpdateLoadBalancerPayload) ([]string, error) {
+					if u == nil {
+						return nil, errors.New("no update happened")
+					}
+					if len(u.Listeners) != 2 {
+						return nil, errors.New("expect two listeners")
+					}
+					httpsListener := u.Listeners[1]
+					if httpsListener.Https == nil || httpsListener.Https.CertificateConfig == nil {
+						return nil, errors.New("certificates config is nil")
+					}
+					return httpsListener.Https.CertificateConfig.CertificateIds, nil
+				}, ConsistOf("random-certificate-id")),
+			))
 		})
 
 		/* 		Context("When deleting an IngressClass", func() {

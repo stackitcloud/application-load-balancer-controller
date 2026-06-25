@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestStackit(t *testing.T) {
+func TestSpec(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "ALB Spec")
 }

@@ -65,6 +65,7 @@ func (r *IngressClassReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to add finalizer to IngressClass: %w", err)
 		}
+		ctrl.LoggerFrom(ctx).Info("Added finalizer")
 		return ctrl.Result{}, nil
 	}
 
@@ -177,6 +178,7 @@ func (r *IngressClassReconciler) handleIngressClassDeletion(
 		if err != nil {
 			return fmt.Errorf("failed to remove finalizer from IngressClass: %w", err)
 		}
+		ctrl.LoggerFrom(ctx).Info("Removed finalizer")
 	}
 
 	return nil
