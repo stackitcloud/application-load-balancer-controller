@@ -62,20 +62,11 @@ func (r *IngressClassReconciler) applyALB(ctx context.Context, ingressClass *net
 		err.RecordEvent(ingressClass, r.Recorder)
 	}
 
-	// TODO: Deal with paging.
-	projectCertificates, err := r.CertificateClient.ListCertificate(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region)
-	if err != nil {
-		return fmt.Errorf("failed to list certificates: %w", err)
-	}
-
 	// ingressClassCertificates contains all certificates that belong to the reconciled ingress class.
 	// Certificates that are created in this function are to be added to this slice.
-	ingressClassCertificates := []certsdk.GetCertificateResponse{}
-	for _, cert := range projectCertificates.Items {
-		if cert.Labels != nil && (*cert.Labels)[labels.LabelIngressClassUID] == string(ingressClass.UID) {
-			// TODO: Check for nil-ness in cert
-			ingressClassCertificates = append(ingressClassCertificates, cert)
-		}
+	ingressClassCertificates, err := r.getCertificatesForIngressClass(ctx, ingressClass)
+	if err != nil {
+		return err
 	}
 
 	missingCertificates := tree.GetMissingCertificates(ingressClassCertificates)
@@ -218,6 +209,24 @@ func (r *IngressClassReconciler) getTLSSecretsFromIngresses(ctx context.Context,
 		}
 	}
 	return secrets, nil
+}
+
+// getCertificatesForIngressClass returns all certificates matching the ingress class via label.
+func (r *IngressClassReconciler) getCertificatesForIngressClass(ctx context.Context, ingressClass *networkingv1.IngressClass) ([]certsdk.GetCertificateResponse, error) {
+	// TODO: deal with paging
+	projectCertificates, err := r.CertificateClient.ListCertificate(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list certificates: %w", err)
+	}
+
+	ingressClassCertificates := []certsdk.GetCertificateResponse{}
+	for _, cert := range projectCertificates.Items {
+		if cert.Labels != nil && (*cert.Labels)[labels.LabelIngressClassUID] == string(ingressClass.UID) {
+			ingressClassCertificates = append(ingressClassCertificates, cert)
+		}
+	}
+
+	return ingressClassCertificates, nil
 }
 
 func updateNeeded(alb *albsdk.LoadBalancer, albPayload *albsdk.UpdateLoadBalancerPayload) bool {
