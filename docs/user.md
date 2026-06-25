@@ -95,7 +95,7 @@ You can override this default order by adding the `alb.stackit.cloud/priority` a
 Note that the top-to-bottom order of paths defined within a single Ingress YAML is non-deterministic. If your application requires strict execution ordering, you must split the rules into separate Ingress resources and assign explicit priority annotations to each.
 
 ### TLS and Certificate Rotation
-The minimal Ingress example in the Quick Start section shows a plain, unencrypted HTTP configuration. To expose your application securely via HTTPS, the ALB Ingress controller supports TLS termination using standard Kubernetes TLS Secrets.
+The minimal Ingress example in the Quick Start section shows an HTTP configuration. To expose your application securely via HTTPS, the ALB Ingress controller supports TLS termination using standard Kubernetes TLS Secrets.
 
 This functionality integrates seamlessly with tools like cert-manager to automate certificate provisioning and renewal. When a Secret is referenced in the Ingress `tls` block, the controller automatically handles the certificate deployment on the ALB. It continuously monitors the Secret for changes, such as during automated certificate rotation, and updates the ALB without manual intervention. Once a TLS Secret is no longer referenced by any Ingress on that ALB, it is automatically removed.
 
@@ -127,6 +127,8 @@ spec:
             port:
               number: 80
 ```
+
+The field `Ingress.spec.tls.hosts` is ignored by the controller. The ALB takes the host information directly from the certificates.
 
 ### Supported Ingress Backends
 Currently, the STACKIT ALB Ingress controller only supports Kubernetes Service backends. Routing traffic to Resource backends (such as individual Pods or other custom resources) is not supported at this time.
