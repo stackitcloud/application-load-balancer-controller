@@ -83,7 +83,6 @@ func (r *IngressClassReconciler) reconcileALBResources(ctx context.Context, ingr
 			// TODO: Gracefully deal with errors
 			return fmt.Errorf("failed to create certificate: %w", err)
 		}
-		// TODO: Check for nil-ness in response
 		ctrl.LoggerFrom(ctx).Info("Created certificate", "id", response.Id, "fingerprint", fingerprint)
 		ingressClassCertificates = append(ingressClassCertificates, *response)
 	}
@@ -108,16 +107,15 @@ func (r *IngressClassReconciler) reconcileALBResources(ctx context.Context, ingr
 			return fmt.Errorf("failed to create load balancer: %w", err)
 		}
 		ctrl.LoggerFrom(ctx).Info("Created application load balancer", "name", create.Name, "version", *alb.Version)
-		return nil // TODO: Early return here prevents certificate clean-up
-	}
-
-	update := tree.ToUpdatePayload(certIDMap, r.ALBConfig.ApplicationLoadBalancer.NetworkID, r.ALBConfig.Global.Region)
-	if updateNeeded(existingALB, update) {
-		alb, err := r.ALBClient.UpdateLoadBalancer(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region, *update.Name, update)
-		if err != nil {
-			return fmt.Errorf("failed to update load balancer: %w", err)
+	} else {
+		update := tree.ToUpdatePayload(certIDMap, r.ALBConfig.ApplicationLoadBalancer.NetworkID, r.ALBConfig.Global.Region)
+		if updateNeeded(existingALB, update) {
+			alb, err := r.ALBClient.UpdateLoadBalancer(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region, *update.Name, update)
+			if err != nil {
+				return fmt.Errorf("failed to update load balancer: %w", err)
+			}
+			ctrl.LoggerFrom(ctx).Info("Updated application load balancer", "name", update.Name, "version", *alb.Version)
 		}
-		ctrl.LoggerFrom(ctx).Info("Updated application load balancer", "name", update.Name, "version", *alb.Version)
 	}
 
 	for _, cert := range duplicateCerts {
