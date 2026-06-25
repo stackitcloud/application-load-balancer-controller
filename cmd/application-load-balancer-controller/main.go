@@ -40,7 +40,7 @@ type options struct {
 	cloudConfig             string
 }
 
-// nolint:funlen // TODO: Refactor into smaller functions.
+// nolint:funlen
 func main() {
 	var opts options
 

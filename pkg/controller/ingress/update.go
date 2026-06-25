@@ -47,7 +47,7 @@ func (r *IngressClassReconciler) applyALB(ctx context.Context, ingressClass *net
 		existingALB = nil
 	}
 
-	tree, errs := spec.BuildTree( // TODO: deal with errors
+	tree, errs := spec.BuildTree(
 		ingressClass,
 		ingresses,
 		secrets,
@@ -57,7 +57,6 @@ func (r *IngressClassReconciler) applyALB(ctx context.Context, ingressClass *net
 	)
 
 	for _, err := range errs {
-		ctrl.LoggerFrom(ctx).Info("Recorded ingress event", "event", err.Error())
 		err.RecordEvent(ingressClass, r.Recorder)
 	}
 
