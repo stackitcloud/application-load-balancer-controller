@@ -89,7 +89,7 @@ func (r *IngressClassReconciler) reconcileALBResources(ctx context.Context, ingr
 	}
 
 	certIDMap := map[spec.CertificateFingerprint]string{}
-	// deplicateCerts contains all certificates that are duplicates of others (in certIDMap) by fingerprint.
+	// duplicateCerts contains all certificates that are duplicates of others (in certIDMap) by fingerprint.
 	// Because they might still be used by the ALB the must only be removed after the ALB was updated.
 	// Which certificate is a duplicate and which is "original" depends on the order in ingressClassCertificates.
 	duplicateCerts := []string{}
