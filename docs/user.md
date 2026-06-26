@@ -8,7 +8,7 @@ To expose an application, you need to deploy three core resources: an IngressCla
 
 #### The ALB (IngressClass)
 
-Creating an IngressClass provisions the managed ALB instance. By default, the ALB is assigned a public ephemeral IP address, unless you configure it as an internal ALB or assign a pre-existing static IP via annotations (see *Annotations* section).
+Creating an IngressClass provisions the managed ALB instance. By default, the ALB is assigned a public ephemeral IP address, unless you configure it as an internal ALB or assign a pre-existing static IP via annotations (see [Annotations](#configuration)).
 
 If no Ingress resources are currently linked to this class, the ALB acts as an empty listener that returns an HTTP 404 Not Found.
 
