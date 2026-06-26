@@ -588,6 +588,8 @@ func (t WorkTreeALB) ToCreatePayload(
 //
 // See ToCreatePayload for more details.
 //
+// The log configuration is taking from the existing load balancer to allow for out-of-band changes of this field.
+//
 // The output is deterministic for easier change detection. //TODO: Make sure this is actually the case.
 func (t WorkTreeALB) ToUpdatePayload(
 	certificateIDMap map[CertificateFingerprint]string,
@@ -596,7 +598,11 @@ func (t WorkTreeALB) ToUpdatePayload(
 ) *albsdk.UpdateLoadBalancerPayload {
 	create := t.ToCreatePayload(certificateIDMap, networkID, region)
 	update := new(albsdk.UpdateLoadBalancerPayload(*create))
-	// TODO: Take observability log config from existing LB.
+	if t.existingALB.Options != nil && t.existingALB.Options.Observability != nil && t.existingALB.Options.Observability.Logs != nil {
+		update.Options.Observability = &albsdk.LoadbalancerOptionObservability{
+			Logs: t.existingALB.Options.Observability.Logs,
+		}
+	}
 	update.Version = t.existingALB.Version
 	return update
 }

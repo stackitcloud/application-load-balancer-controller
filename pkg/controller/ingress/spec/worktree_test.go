@@ -9,6 +9,7 @@ import (
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/testutil"
 	. "github.com/stackitcloud/application-load-balancer-controller/pkg/testutil/ingress"
 	. "github.com/stackitcloud/application-load-balancer-controller/pkg/testutil/service"
+	"github.com/stackitcloud/stackit-sdk-go/services/alb/v2api"
 
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -423,6 +424,26 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(create.TargetPools[2].TlsConfig.Enabled).To(HaveValue(BeFalse()))
 		Expect(create.TargetPools[3].TlsConfig.CustomCa).To(HaveValue(Equal("custom-ca")))
 		Expect(create.TargetPools[4].TlsConfig.SkipCertificateValidation).To(HaveValue(BeTrue()))
+	})
+
+	It("should use the log configuration from the existing load balance", func() {
+		tree, errs := BuildTree(
+			&networkingv1.IngressClass{}, nil, nil, nil, nil, &v2api.LoadBalancer{
+				Options: &v2api.LoadBalancerOptions{
+					Observability: &v2api.LoadbalancerOptionObservability{
+						Logs: &v2api.LoadbalancerOptionLogs{
+							CredentialsRef: new("my-creds"),
+							PushUrl:        new("my-push-url"),
+						},
+					},
+				},
+			},
+		)
+
+		Expect(errs).To(BeEmpty())
+		update := tree.ToUpdatePayload(nil, "network-id", "region")
+		Expect(update.Options.Observability.Logs.CredentialsRef).To(HaveValue(Equal("my-creds")))
+		Expect(update.Options.Observability.Logs.PushUrl).To(HaveValue(Equal("my-push-url")))
 	})
 })
 
