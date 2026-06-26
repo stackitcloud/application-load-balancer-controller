@@ -433,7 +433,7 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(create.TargetPools[4].TlsConfig.SkipCertificateValidation).To(HaveValue(BeTrue()))
 	})
 
-	It("should use the log configuration from the existing load balance", func() {
+	It("should use the log configuration from the existing load balancer", func() {
 		tree, errs := BuildTree(
 			&networkingv1.IngressClass{}, nil, nil, nil, nil, &v2api.LoadBalancer{
 				Options: &v2api.LoadBalancerOptions{
@@ -451,6 +451,18 @@ var _ = Describe("WorkTreeALB", func() {
 		update := tree.ToUpdatePayload(nil, "network-id", "region")
 		Expect(update.Options.Observability.Logs.CredentialsRef).To(HaveValue(Equal("my-creds")))
 		Expect(update.Options.Observability.Logs.PushUrl).To(HaveValue(Equal("my-push-url")))
+	})
+
+	It("should use the version from the existing load balancer in update payload", func() {
+		tree, errs := BuildTree(
+			&networkingv1.IngressClass{}, nil, nil, nil, nil, &v2api.LoadBalancer{
+				Version: new("current-version"),
+			},
+		)
+
+		Expect(errs).To(BeEmpty())
+		update := tree.ToUpdatePayload(nil, "network-id", "region")
+		Expect(update.Version).To(HaveValue(Equal("current-version")))
 	})
 
 	It("should turn implementation-specific paths into exact matchers", func() {
