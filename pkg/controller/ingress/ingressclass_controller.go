@@ -163,7 +163,7 @@ func (r *IngressClassReconciler) handleIngressClassDeletion(
 		}
 		patch := client.MergeFrom(before)
 		if err := r.Client.Status().Patch(ctx, ingress, patch); err != nil {
-			return fmt.Errorf("failed to patch shoot object: %w", err)
+			return fmt.Errorf("failed to patch ingress %s: %w", client.ObjectKeyFromObject(ingress), err)
 		}
 	}
 
