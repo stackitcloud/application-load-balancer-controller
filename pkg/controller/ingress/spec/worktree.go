@@ -270,21 +270,19 @@ func addPathToTree(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass, i
 	}
 
 	albPath, exists := host.paths[_pathWithType]
-	if exists && albPath.ingressPathReference == ingressPathReference {
+	if exists {
 		errors = append(errors, ErrorEvent{
 			Ingress:     ingress,
-			FieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("path").Index(pathIndex),
+			FieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("paths").Index(pathIndex),
 			Description: "Path already exists",
 		})
 		return false, errors
 	}
-	if !exists {
-		albPath = &workTreePath{
-			path:                 _pathWithType,
-			ingressPathReference: ingressPathReference,
-		}
+	albPath = &workTreePath{
+		path:                 _pathWithType,
+		ingressPathReference: ingressPathReference,
+		websocket:            GetAnnotation(AnnotationWebSocket, false, ingress, ingressClass),
 	}
-	albPath.websocket = GetAnnotation(AnnotationWebSocket, false, ingress, ingressClass)
 
 	// We assign listener and host whether they exist or not. If they already exist we assign them to the same pointer.
 	tree.listeners[port] = listener
