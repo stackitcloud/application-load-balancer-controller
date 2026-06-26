@@ -19,8 +19,10 @@ import (
 const (
 	// fieldIndexIngressClass indexes the ingress class on an ingress.
 	fieldIndexIngressClass = ".spec.ingressClassName"
-	// fieldIndexService indexes a service reference on an ingress.
+	// fieldIndexService indexes all service references on an ingress. An ingress can be indexed multiple times.
 	fieldIndexService = ".spec.rules.http.paths.backend.service.name"
+	// fieldIndexSecret indexes all secret references on an ingress. An ingress can be indexed multiple times.
+	fieldIndexSecret = ".spec.tls.secret"
 )
 
 // SetupWithManager sets up the controller with the Manager.
@@ -54,6 +56,16 @@ func (r *IngressClassReconciler) SetupWithManager(ctx context.Context, mgr ctrl.
 		return refs
 	})
 
+	mgr.GetCache().IndexField(ctx, &networkingv1.Ingress{}, fieldIndexSecret, func(o client.Object) []string {
+		ingress := o.(*networkingv1.Ingress)
+		refs := []string{}
+		for i := range ingress.Spec.TLS {
+			refs = append(refs, ingress.Spec.TLS[i].SecretName)
+
+		}
+		return refs
+	})
+
 	if ctrlName == "" {
 		ctrlName = "ingressclass"
 	}
@@ -68,6 +80,7 @@ func (r *IngressClassReconciler) SetupWithManager(ctx context.Context, mgr ctrl.
 		Complete(r)
 }
 
+// secretEventHandler returns all ingress classes that have at least one ingress that references the given secret.
 func secretEventHandler(c client.Client) handler.EventHandler {
 	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o client.Object) []ctrl.Request {
 		// Filter out non-TLS Secrets.
@@ -76,44 +89,35 @@ func secretEventHandler(c client.Client) handler.EventHandler {
 			return nil
 		}
 
-		ingressList := &networkingv1.IngressList{}
-		if err := c.List(ctx, ingressList, client.InNamespace(secret.Namespace)); err != nil {
+		ingresses := &networkingv1.IngressList{}
+		err := c.List(ctx, ingresses, client.InNamespace(secret.Namespace), client.MatchingFields{fieldIndexSecret: secret.Name})
+		if err != nil {
 			return nil
 		}
 
-		classNames := make(map[string]struct{})
-		for i := range ingressList.Items {
-			ingress := ingressList.Items[i]
-			if ingress.Spec.IngressClassName == nil {
-				continue
-			}
-
-			for _, tls := range ingress.Spec.TLS {
-				if tls.SecretName == secret.Name {
-					classNames[*ingress.Spec.IngressClassName] = struct{}{}
-					break
-				}
+		classes := map[string]any{}
+		for i := range ingresses.Items {
+			ingress := &ingresses.Items[i]
+			if ingress.Spec.IngressClassName != nil && *ingress.Spec.IngressClassName == "" {
+				classes[*ingress.Spec.IngressClassName] = nil
 			}
 		}
 
-		var requestList []ctrl.Request
-		for className := range classNames {
-			ingressClass := &networkingv1.IngressClass{}
-			err := c.Get(ctx, client.ObjectKey{Name: className}, ingressClass)
-			if err != nil || ingressClass.Spec.Controller != controllerName {
+		reqs := []ctrl.Request{}
+		for className := range classes {
+			class := &networkingv1.IngressClass{}
+			if err := c.Get(ctx, types.NamespacedName{Name: className}, class); err != nil {
 				continue
 			}
-
-			requestList = append(requestList, ctrl.Request{
-				NamespacedName: client.ObjectKeyFromObject(ingressClass),
-			})
+			if class.Spec.Controller == controllerName {
+				reqs = append(reqs, reconcile.Request{NamespacedName: types.NamespacedName{Name: className}})
+			}
 		}
-
-		return requestList
+		return reqs
 	})
 }
 
-// serviceEventHandler returns all ingress classes that have at least one ingress that references the given secret.
+// serviceEventHandler returns all ingress classes that have at least one ingress that references the given service.
 func serviceEventHandler(c client.Client) handler.EventHandler {
 	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o client.Object) []ctrl.Request {
 		service, ok := o.(*corev1.Service)
