@@ -47,12 +47,12 @@ func main() {
 	flag.StringVar(&opts.metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&opts.probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	flag.BoolVar(&opts.enableLeaderElection, "leader-elect", false,
+	flag.BoolVar(&opts.enableLeaderElection, "leader-elect", true,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&opts.leaderElectionNamespace, "leader-election-namespace", "default", "The namespace in which the leader "+
 		"election resource will be created.")
-	flag.StringVar(&opts.leaderElectionID, "leader-election-id", "d0fbe9c4.stackit.cloud", "The name of the resource that "+
+	flag.StringVar(&opts.leaderElectionID, "leader-election-id", "application-load-balancer-controller.stackit.cloud", "The name of the resource that "+
 		"leader election will use for holding the leader lock.")
 	flag.StringVar(&opts.cloudConfig, "cloud-config", "cloud.yaml", "The path to the cloud config file.")
 
