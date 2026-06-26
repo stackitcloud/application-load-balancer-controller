@@ -61,14 +61,14 @@ const (
 )
 
 // GetAnnotation retrieves an annotation value from objects.
-// If multiple objects contain the annotation, the first object in the slice containing the annotation takes precedence.
+// If multiple objects contain the annotation, the first object containing the annotation takes precedence.
 // If no object contains the annotation then defaultValue is returned.
 //
 // GetAnnotation parses the value of the annotation and return type T.
 // If T is string then the value is returned raw.
 // For int and bool Atoi and ParseBool are called respectively.
 // If parsing fails or T is any other type, defaultValue is returned.
-// Only the latest found value is parsed.
+// Only the first found value is parsed.
 func GetAnnotation[T any](annotation string, defaultValue T, objects ...client.Object) T {
 	var rawVal string
 	var found bool
