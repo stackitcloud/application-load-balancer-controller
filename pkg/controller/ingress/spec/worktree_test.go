@@ -38,19 +38,26 @@ var _ = Describe("WorkTreeALB", func() {
 					WithPath("/exact/a/a", new(networkingv1.PathTypeExact), "my-service", networkingv1.ServiceBackendPort{Number: 1337}),
 				),
 			),
+			Ingress(
+				"default", "ingress-with-default-priority",
+				WithRule("my-host.local",
+					WithPath("/implementation-specific", new(networkingv1.PathTypeImplementationSpecific), "my-service", networkingv1.ServiceBackendPort{Number: 1337}),
+				),
+			),
 		}, nil, []corev1.Service{
 			Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 1337, 30000, corev1.ProtocolTCP)),
 		}, nil, nil)
 		Expect(errs).To(BeEmpty())
 		createPayload := tree.ToCreatePayload(nil, "", "")
 		Expect(createPayload.Listeners[0].Http.Hosts[0].Host).To(HaveValue(Equal("my-host.local")))
-		Expect(createPayload.Listeners[0].Http.Hosts[0].Rules).To(HaveLen(6))
+		Expect(createPayload.Listeners[0].Http.Hosts[0].Rules).To(HaveLen(7))
 		Expect(createPayload.Listeners[0].Http.Hosts[0].Rules[0].Path.ExactMatch).To(HaveValue(Equal("/exact/a/a")))
 		Expect(createPayload.Listeners[0].Http.Hosts[0].Rules[1].Path.ExactMatch).To(HaveValue(Equal("/exact/b/b")))
 		Expect(createPayload.Listeners[0].Http.Hosts[0].Rules[2].Path.ExactMatch).To(HaveValue(Equal("/exact/a")))
 		Expect(createPayload.Listeners[0].Http.Hosts[0].Rules[3].Path.ExactMatch).To(HaveValue(Equal("/exact/b")))
-		Expect(createPayload.Listeners[0].Http.Hosts[0].Rules[4].Path.Prefix).To(HaveValue(Equal("/prefix/a")))
-		Expect(createPayload.Listeners[0].Http.Hosts[0].Rules[5].Path.Prefix).To(HaveValue(Equal("/prefix/b")))
+		Expect(createPayload.Listeners[0].Http.Hosts[0].Rules[4].Path.ExactMatch).To(HaveValue(Equal("/implementation-specific")))
+		Expect(createPayload.Listeners[0].Http.Hosts[0].Rules[5].Path.Prefix).To(HaveValue(Equal("/prefix/a")))
+		Expect(createPayload.Listeners[0].Http.Hosts[0].Rules[6].Path.Prefix).To(HaveValue(Equal("/prefix/b")))
 	})
 
 	It("should match rules against correct node ports", func() {
