@@ -19,7 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func (r *IngressClassReconciler) reconcileALBResources(ctx context.Context, ingressClass *networkingv1.IngressClass) error {
+func (r *IngressClassReconciler) reconcileALBResources(ctx context.Context, ingressClass *networkingv1.IngressClass) error { //nolint:gocyclo,funlen // Breaking up this function won't make it much simpler.
 	ingresses, err := r.getIngressesForIngressClass(ctx, ingressClass)
 	if err != nil {
 		return fmt.Errorf("failed to get ingresses for class: %w", err)
@@ -145,7 +145,8 @@ func (r *IngressClassReconciler) reconcileALBResources(ctx context.Context, ingr
 func (r *IngressClassReconciler) getServicesForIngresses(ctx context.Context, ingresses []networkingv1.Ingress) ([]corev1.Service, error) {
 	// TODO: This and the next function can be generalized with a NamespacedReferenceList function. Possibly with a callback function for the indexes. Should return a map indexed with types.NamespacedName.
 	services := []corev1.Service{}
-	for _, ingress := range ingresses {
+	for i := range ingresses {
+		ingress := ingresses[i]
 		for ruleIndex, rule := range ingress.Spec.Rules {
 			for pathIndex, path := range rule.HTTP.Paths {
 				if path.Backend.Service.Name == "" {
@@ -188,7 +189,8 @@ func (r *IngressClassReconciler) getServicesForIngresses(ctx context.Context, in
 
 func (r *IngressClassReconciler) getTLSSecretsFromIngresses(ctx context.Context, ingresses []networkingv1.Ingress) ([]corev1.Secret, error) {
 	secrets := []corev1.Secret{}
-	for _, ingress := range ingresses {
+	for i := range ingresses {
+		ingress := ingresses[i]
 		for tlsIndex, tls := range ingress.Spec.TLS {
 			secret := corev1.Secret{}
 			err := r.Client.Get(ctx, types.NamespacedName{Namespace: ingress.Namespace, Name: tls.SecretName}, &secret)

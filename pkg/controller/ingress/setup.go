@@ -82,7 +82,8 @@ func secretEventHandler(c client.Client) handler.EventHandler {
 		}
 
 		classNames := make(map[string]struct{})
-		for _, ingress := range ingressList.Items {
+		for i := range ingressList.Items {
+			ingress := ingressList.Items[i]
 			if ingress.Spec.IngressClassName == nil {
 				continue
 			}
@@ -121,7 +122,7 @@ func serviceEventHandler(c client.Client) handler.EventHandler {
 		}
 
 		ingresses := &networkingv1.IngressList{}
-		err := c.List(context.Background(), ingresses, client.InNamespace(service.Namespace), client.MatchingFields{fieldIndexService: service.Name})
+		err := c.List(ctx, ingresses, client.InNamespace(service.Namespace), client.MatchingFields{fieldIndexService: service.Name})
 		if err != nil {
 			return nil
 		}
@@ -137,7 +138,7 @@ func serviceEventHandler(c client.Client) handler.EventHandler {
 		reqs := []ctrl.Request{}
 		for className := range classes {
 			class := &networkingv1.IngressClass{}
-			if err := c.Get(context.Background(), types.NamespacedName{Name: className}, class); err != nil {
+			if err := c.Get(ctx, types.NamespacedName{Name: className}, class); err != nil {
 				continue
 			}
 			if class.Spec.Controller == controllerName {

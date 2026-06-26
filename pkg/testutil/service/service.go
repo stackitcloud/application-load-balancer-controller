@@ -1,3 +1,5 @@
+// revive:disable:exported // This file will be dot-imported.
+
 package service
 
 import (

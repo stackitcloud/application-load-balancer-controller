@@ -110,7 +110,8 @@ func (r *IngressClassReconciler) updateStatus(ctx context.Context, ingressClass 
 		return ctrl.Result{}, fmt.Errorf("failed to get ingresses: %w", err)
 	}
 
-	for _, ingress := range ingresses {
+	for i := range ingresses {
+		ingress := &ingresses[i]
 		before := ingress.DeepCopy()
 
 		ingress.Status.LoadBalancer.Ingress = []networkingv1.IngressLoadBalancerIngress{
@@ -123,7 +124,7 @@ func (r *IngressClassReconciler) updateStatus(ctx context.Context, ingressClass 
 			continue
 		}
 		patch := client.MergeFrom(before)
-		if err := r.Client.Status().Patch(ctx, &ingress, patch); err != nil {
+		if err := r.Client.Status().Patch(ctx, ingress, patch); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to patch ingress status object: %w", err)
 		}
 	}
@@ -151,7 +152,8 @@ func (r *IngressClassReconciler) handleIngressClassDeletion(
 		return err
 	}
 
-	for _, ingress := range ingresses {
+	for i := range ingresses {
+		ingress := &ingresses[i]
 		before := ingress.DeepCopy()
 
 		ingress.Status.LoadBalancer.Ingress = []networkingv1.IngressLoadBalancerIngress{}
@@ -160,7 +162,7 @@ func (r *IngressClassReconciler) handleIngressClassDeletion(
 			continue
 		}
 		patch := client.MergeFrom(before)
-		if err := r.Client.Status().Patch(ctx, &ingress, patch); err != nil {
+		if err := r.Client.Status().Patch(ctx, ingress, patch); err != nil {
 			return fmt.Errorf("failed to patch shoot object: %w", err)
 		}
 	}

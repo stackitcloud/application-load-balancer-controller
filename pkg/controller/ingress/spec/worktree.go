@@ -76,7 +76,7 @@ type ingressPathReference struct {
 
 // toTargetPoolName returns the desired target pool name for this path reference.
 // It globally identifies this path via UID of the ingress.
-func (i ingressPathReference) toTargetPoolName() string {
+func (i *ingressPathReference) toTargetPoolName() string {
 	return fmt.Sprintf("%s-%d-%d", i.uid, i.ruleIndex, i.pathIndex)
 }
 
@@ -103,7 +103,7 @@ type WorkTreeCertificate struct {
 // I.e. all ingresses will be processed regardless of their ingress class reference.
 //
 // This function changes the order of the slice ingresses.
-func BuildTree(
+func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make it much simpler.
 	ingressClass *networkingv1.IngressClass,
 	ingresses []networkingv1.Ingress,
 	secrets []corev1.Secret,
@@ -114,12 +114,12 @@ func BuildTree(
 	errors := []ErrorEvent{}
 
 	servicesMap := map[types.NamespacedName]corev1.Service{}
-	for _, s := range services {
-		servicesMap[client.ObjectKeyFromObject(&s)] = s
+	for i := range services {
+		servicesMap[client.ObjectKeyFromObject(&services[i])] = services[i]
 	}
 	secretsMap := map[types.NamespacedName]corev1.Secret{}
-	for _, s := range secrets {
-		secretsMap[client.ObjectKeyFromObject(&s)] = s
+	for i := range secrets {
+		secretsMap[client.ObjectKeyFromObject(&secrets[i])] = secrets[i]
 	}
 
 	targets := getTargetsOfNodes(nodes)
@@ -137,7 +137,7 @@ func BuildTree(
 		certificates: map[CertificateFingerprint]WorkTreeCertificate{},
 	}
 
-	errors = append(errors, addAccessControlToTree(tree, ingressClass)...)
+	addAccessControlToTree(tree, ingressClass)
 
 	slices.SortFunc(ingresses, func(a, b networkingv1.Ingress) int {
 		if diff := GetAnnotation(AnnotationPriority, 0, &b) - GetAnnotation(AnnotationPriority, 0, &a); diff != 0 {
@@ -149,12 +149,13 @@ func BuildTree(
 		return cmp.Compare(fmt.Sprintf("%s/%s", a.Namespace, a.Name),
 			fmt.Sprintf("%s/%s", b.Namespace, b.Name))
 	})
-	for _, ingress := range ingresses {
+	for i := range ingresses {
+		ingress := &ingresses[i]
 		for tlsIndex, tls := range ingress.Spec.TLS {
 			secret, exists := secretsMap[types.NamespacedName{Namespace: ingress.Namespace, Name: tls.SecretName}]
 			if !exists {
 				errors = append(errors, ErrorEvent{
-					Ingress:     &ingress,
+					Ingress:     ingress,
 					FieldPath:   field.NewPath("spec", "tls").Index(tlsIndex).Child("secretName"),
 					Description: "TLS secret doesn't exist",
 				})
@@ -162,7 +163,7 @@ func BuildTree(
 			}
 			if secret.Type != corev1.SecretTypeTLS {
 				errors = append(errors, ErrorEvent{
-					Ingress:     &ingress,
+					Ingress:     ingress,
 					FieldPath:   field.NewPath("spec", "tls").Index(tlsIndex).Child("secretName"),
 					Description: "TLS secret isn't of type kubernetes.io/tls",
 				})
@@ -172,7 +173,7 @@ func BuildTree(
 			fingerprint, err := ValidateTLSCertAndFingerprint(secret.Data[corev1.TLSCertKey], secret.Data[corev1.TLSPrivateKeyKey])
 			if err != nil {
 				errors = append(errors, ErrorEvent{
-					Ingress:     &ingress,
+					Ingress:     ingress,
 					FieldPath:   field.NewPath("spec", "tls").Index(tlsIndex).Child("secretName"),
 					Description: fmt.Sprintf("invalid certificate: %s", err.Error()),
 				})
@@ -189,11 +190,11 @@ func BuildTree(
 			for pathIndex, path := range rule.HTTP.Paths {
 				ingressPathReference := ingressPathReference{namespace: ingress.Namespace, name: ingress.Name, uid: string(ingress.UID), ruleIndex: ruleIndex, pathIndex: pathIndex}
 
-				httpsOnly := GetAnnotation(AnnotationHTTPSOnly, false, &ingress, ingressClass)
-				httpPort := GetAnnotation(AnnotationHTTPPort, 80, &ingress, ingressClass)
-				httpsPort := GetAnnotation(AnnotationHTTPSPort, 443, &ingress, ingressClass)
+				httpsOnly := GetAnnotation(AnnotationHTTPSOnly, false, ingress, ingressClass)
+				httpPort := GetAnnotation(AnnotationHTTPPort, 80, ingress, ingressClass)
+				httpsPort := GetAnnotation(AnnotationHTTPSPort, 443, ingress, ingressClass)
 
-				targetPool, e := buildTargetPool(tree, ingressClass, targets, ingress, rule, ruleIndex, path, pathIndex, servicesMap)
+				targetPool, e := buildTargetPool(tree, ingressClass, targets, ingress, ruleIndex, path, pathIndex, servicesMap)
 				errors = append(errors, e...)
 				if targetPool == nil {
 					continue // If the target pool is invalid we do not add any rules.
@@ -201,11 +202,11 @@ func BuildTree(
 
 				var httpAdded, httpsAdded bool
 				if !httpsOnly {
-					httpAdded, e = addPathToTree(tree, ingressClass, &ingress, rule, ruleIndex, path, pathIndex, int16(httpPort), protocolHTTP)
+					httpAdded, e = addPathToTree(tree, ingressClass, ingress, rule, ruleIndex, path, pathIndex, int16(httpPort), protocolHTTP)
 					errors = append(errors, e...)
 				}
 				if len(ingress.Spec.TLS) > 0 {
-					httpsAdded, e = addPathToTree(tree, ingressClass, &ingress, rule, ruleIndex, path, pathIndex, int16(httpsPort), protocolHTTPS)
+					httpsAdded, e = addPathToTree(tree, ingressClass, ingress, rule, ruleIndex, path, pathIndex, int16(httpsPort), protocolHTTPS)
 					errors = append(errors, e...)
 				}
 
@@ -220,16 +221,15 @@ func BuildTree(
 	return tree, errors
 }
 
-func addAccessControlToTree(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass) []ErrorEvent {
+func addAccessControlToTree(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass) {
 	annotation := GetAnnotation(AnnotationAllowedSourceRanges, "", ingressClass)
 	if annotation == "" {
-		return nil
+		return
 	}
 	ranges := strings.Split(annotation, ",")
 	tree.accessControl = &albsdk.LoadbalancerOptionAccessControl{
 		AllowedSourceRanges: ranges,
 	}
-	return nil
 }
 
 // addPathToTree adds the given path to tree under the given port and protocol.
@@ -292,7 +292,7 @@ func addPathToTree(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass, i
 //
 // This function doesn't mutate tree or any other arguments.
 // If the target pool is not valid nil is returned together with a list of errors.
-func buildTargetPool(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass, targets []albsdk.Target, ingress networkingv1.Ingress, rule networkingv1.IngressRule, ruleIndex int, path networkingv1.HTTPIngressPath, pathIndex int, servicesMap map[types.NamespacedName]corev1.Service) (*albsdk.TargetPool, []ErrorEvent) {
+func buildTargetPool(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass, targets []albsdk.Target, ingress *networkingv1.Ingress, ruleIndex int, path networkingv1.HTTPIngressPath, pathIndex int, servicesMap map[types.NamespacedName]corev1.Service) (*albsdk.TargetPool, []ErrorEvent) {
 	errors := []ErrorEvent{}
 
 	ingressPathReference := ingressPathReference{namespace: ingress.Namespace, name: ingress.Name, uid: string(ingress.UID), ruleIndex: ruleIndex, pathIndex: pathIndex}
@@ -301,7 +301,7 @@ func buildTargetPool(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass,
 	if !exists {
 		if len(tree.targetPools) >= LimitTargetPools {
 			errors = append(errors, ErrorEvent{
-				Ingress:     &ingress,
+				Ingress:     ingress,
 				FieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("paths").Index(pathIndex),
 				Description: "Target pool limit reached. Path will be ignored.",
 			})
@@ -314,7 +314,7 @@ func buildTargetPool(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass,
 	service, exists := servicesMap[types.NamespacedName{Namespace: ingress.Namespace, Name: path.Backend.Service.Name}]
 	if !exists {
 		errors = append(errors, ErrorEvent{
-			Ingress:     &ingress,
+			Ingress:     ingress,
 			FieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("paths").Index(pathIndex).Child("backend", "service", "name"),
 			Description: "Service doesn't exist",
 		})
@@ -322,7 +322,7 @@ func buildTargetPool(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass,
 	}
 	if service.Spec.Type != corev1.ServiceTypeNodePort && service.Spec.Type != corev1.ServiceTypeLoadBalancer {
 		errors = append(errors, ErrorEvent{
-			Ingress:     &ingress,
+			Ingress:     ingress,
 			FieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("paths").Index(pathIndex).Child("backend", "service", "name"),
 			Description: "Service is not of type NodePort or LoadBalancer",
 		})
@@ -334,7 +334,7 @@ func buildTargetPool(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass,
 			port.Name == path.Backend.Service.Port.Name {
 			if port.NodePort == 0 {
 				errors = append(errors, ErrorEvent{
-					Ingress:     &ingress,
+					Ingress:     ingress,
 					FieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("paths").Index(pathIndex).Child("backend", "service"),
 					Description: "Service port doesn't have a node port",
 				})
@@ -345,7 +345,7 @@ func buildTargetPool(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass,
 	}
 	if nodePort == 0 {
 		errors = append(errors, ErrorEvent{
-			Ingress:     &ingress,
+			Ingress:     ingress,
 			FieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("paths").Index(pathIndex).Child("backend", "service"),
 			Description: "Port not found in service",
 		})
@@ -356,10 +356,10 @@ func buildTargetPool(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass,
 	targetPool.TargetPort = new(nodePort)
 	targetPool.Targets = targets
 	targetPool.TlsConfig = &albsdk.TlsConfig{
-		Enabled:                   new(GetAnnotation(AnnotationTargetPoolTLSEnabled, false, &service, &ingress, ingressClass)),
-		SkipCertificateValidation: new(GetAnnotation(AnnotationTargetPoolTLSSkipCertificateValidation, false, &service, &ingress, ingressClass)),
+		Enabled:                   new(GetAnnotation(AnnotationTargetPoolTLSEnabled, false, &service, ingress, ingressClass)),
+		SkipCertificateValidation: new(GetAnnotation(AnnotationTargetPoolTLSSkipCertificateValidation, false, &service, ingress, ingressClass)),
 	}
-	if ca := GetAnnotation(AnnotationTargetPoolTLSCustomCa, "", &service, &ingress, ingressClass); ca != "" {
+	if ca := GetAnnotation(AnnotationTargetPoolTLSCustomCa, "", &service, ingress, ingressClass); ca != "" {
 		targetPool.TlsConfig.CustomCa = new(ca)
 	}
 	// If externalTrafficPolicy=Cluster we use the default TCP health check on the node port itself.
@@ -393,8 +393,10 @@ func ValidateTLSCertAndFingerprint(publicKey, privateKey []byte) (string, error)
 }
 
 func getTargetsOfNodes(nodes []corev1.Node) []albsdk.Target {
+	// TODO: remove nodes that are in deletion
 	targets := []albsdk.Target{}
-	for _, node := range nodes {
+	for i := range nodes {
+		node := &nodes[i]
 		for j := range node.Status.Addresses {
 			address := node.Status.Addresses[j]
 			if address.Type == corev1.NodeInternalIP {
@@ -413,7 +415,7 @@ func getTargetsOfNodes(nodes []corev1.Node) []albsdk.Target {
 // It can be used to create all remaining certificates required to create the ALB.
 //
 // This function uses the SHA256 fingerprint from the response to match existing certificates.
-func (t WorkTreeALB) GetMissingCertificates(existingCerts []certsdk.GetCertificateResponse) map[CertificateFingerprint]WorkTreeCertificate {
+func (t *WorkTreeALB) GetMissingCertificates(existingCerts []certsdk.GetCertificateResponse) map[CertificateFingerprint]WorkTreeCertificate {
 	missingCerts := map[CertificateFingerprint]WorkTreeCertificate{}
 	existingCertsMap := map[CertificateFingerprint]any{}
 	for _, cert := range existingCerts {
@@ -433,7 +435,7 @@ func (t WorkTreeALB) GetMissingCertificates(existingCerts []certsdk.GetCertifica
 }
 
 // GetUnusedCertificates return all certificates in existingCerts that are not referenced in t.
-func (t WorkTreeALB) GetUnusedCertificates(existingCerts map[CertificateFingerprint]string) map[CertificateFingerprint]string {
+func (t *WorkTreeALB) GetUnusedCertificates(existingCerts map[CertificateFingerprint]string) map[CertificateFingerprint]string {
 	unused := maps.Clone(existingCerts)
 	for fingerprint := range t.certificates {
 		delete(unused, fingerprint)
@@ -445,7 +447,7 @@ func (t WorkTreeALB) GetUnusedCertificates(existingCerts map[CertificateFingerpr
 //
 // certificateIDMap must contain all certificates that exist in the API for this ALB.
 // Certificates that are referenced in t but missing in certificateIDMap are not included in the payload.
-func (t WorkTreeALB) ToCreatePayload(
+func (t *WorkTreeALB) ToCreatePayload( //nolint:gocyclo,funlen // Breaking up this function won't make it much simpler.
 	certificateIDMap map[CertificateFingerprint]string,
 	networkID string,
 	region string,
@@ -595,7 +597,7 @@ func (t WorkTreeALB) ToCreatePayload(
 // The log configuration is taking from the existing load balancer to allow for out-of-band changes of this field.
 //
 // The output is deterministic for easier change detection. //TODO: Make sure this is actually the case.
-func (t WorkTreeALB) ToUpdatePayload(
+func (t *WorkTreeALB) ToUpdatePayload(
 	certificateIDMap map[CertificateFingerprint]string,
 	networkID string,
 	region string,

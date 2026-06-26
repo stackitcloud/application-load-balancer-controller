@@ -40,7 +40,7 @@ type options struct {
 	cloudConfig             string
 }
 
-// nolint:funlen
+// nolint:funlen // This function isn't awfully complex.
 func main() {
 	var opts options
 

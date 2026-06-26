@@ -150,7 +150,7 @@ var _ = Describe("IngressClassController", func() {
 	})
 
 	It("should create an empty ALB for an ingress class matching the controller", func(ctx context.Context) {
-		var getLoadBalancerResponse *atomic.Pointer[albsdk.LoadBalancer] = &atomic.Pointer[albsdk.LoadBalancer]{}
+		getLoadBalancerResponse := &atomic.Pointer[albsdk.LoadBalancer]{}
 		certClient.EXPECT().ListCertificate(gomock.Any(), gomock.Any(), gomock.Any()).Return(new(certsdk.ListCertificatesResponse{
 			Items: []certsdk.GetCertificateResponse{},
 		}), nil).AnyTimes()
@@ -243,7 +243,7 @@ var _ = Describe("IngressClassController", func() {
 
 		It("should create certificate and reference it in ALB", func(ctx context.Context) {
 			updateRequest := &atomic.Pointer[albsdk.UpdateLoadBalancerPayload]{}
-			certClient.EXPECT().CreateCertificate(gomock.Any(), projectID, region, gomock.Any()).DoAndReturn(func(_ context.Context, projectID, region string, certificate *certsdk.CreateCertificatePayload) (*certsdk.GetCertificateResponse, error) {
+			certClient.EXPECT().CreateCertificate(gomock.Any(), projectID, region, gomock.Any()).DoAndReturn(func(_ context.Context, _, _ string, certificate *certsdk.CreateCertificatePayload) (*certsdk.GetCertificateResponse, error) {
 				fingerprint, err := spec.ValidateTLSCertAndFingerprint([]byte(*certificate.PublicKey), []byte(*certificate.PrivateKey))
 				if err != nil {
 					return nil, fmt.Errorf("invalid certificate: %w", err)
@@ -261,7 +261,7 @@ var _ = Describe("IngressClassController", func() {
 				})
 				return &response, nil
 			}).Times(1)
-			albClient.EXPECT().UpdateLoadBalancer(gomock.Any(), projectID, region, gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, projectID, region, name string, update *albsdk.UpdateLoadBalancerPayload) (*albsdk.LoadBalancer, error) {
+			albClient.EXPECT().UpdateLoadBalancer(gomock.Any(), projectID, region, gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _, _, _ string, update *albsdk.UpdateLoadBalancerPayload) (*albsdk.LoadBalancer, error) {
 				response := albsdk.LoadBalancer(*update)
 				response.Version = new("version-after-update")
 				response.ExternalAddress = new("127.0.0.1")
