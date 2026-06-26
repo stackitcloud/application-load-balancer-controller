@@ -32,3 +32,13 @@ func HaveName(name string) types.GomegaMatcher {
 		return o.GetName()
 	}, Equal(name))
 }
+
+// CreateKubernetesResourceAndDeferDeletion creates obj via cl and registers a callback to clean up some object again.
+// The clean up waits until the object is gone from the API, i.e. are finalizer must be removed.
+func CreateKubernetesResourceAndDeferDeletion(ctx context.Context, cl client.Client, obj client.Object) {
+	GinkgoHelper()
+	Expect(cl.Create(ctx, obj)).To(Succeed())
+	DeferCleanup(func(ctx context.Context) {
+		DeleteAndWaitForKubernetesResource(ctx, cl, obj)
+	})
+}
