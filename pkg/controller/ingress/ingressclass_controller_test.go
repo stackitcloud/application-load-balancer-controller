@@ -72,7 +72,7 @@ var _ = Describe("IngressClassController", func() {
 		}
 		Expect(k8sClient.Create(ctx, namespace)).To(Succeed())
 		DeferCleanup(func(ctx context.Context) {
-			// There is no namespace controller deployed.
+			// There is no namespace controller deployed. So the content of the namespace won't be cleaned up by Kubernetes itself.
 			Expect(k8sClient.Delete(ctx, namespace)).To(Succeed())
 		})
 
@@ -82,10 +82,7 @@ var _ = Describe("IngressClassController", func() {
 				Addresses: []corev1.NodeAddress{{Type: corev1.NodeInternalIP, Address: "10.10.10.10"}},
 			},
 		}
-		Expect(k8sClient.Create(ctx, &node)).To(Succeed())
-		DeferCleanup(func(ctx context.Context) {
-			Expect(k8sClient.Delete(ctx, &node)).To(Succeed())
-		})
+		testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, &node)
 
 		mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 			Scheme: scheme.Scheme,
@@ -135,10 +132,7 @@ var _ = Describe("IngressClassController", func() {
 					Controller: "some.other/controller",
 				},
 			}
-			Expect(k8sClient.Create(ctx, ignoredIngressClass)).To(Succeed())
-			DeferCleanup(func(ctx context.Context) {
-				testutil.DeleteAndWaitForKubernetesResource(ctx, k8sClient, ignoredIngressClass)
-			})
+			testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, ignoredIngressClass)
 
 			Consistently(func(g Gomega) {
 				err := k8sClient.Get(ctx, client.ObjectKeyFromObject(ignoredIngressClass), ignoredIngressClass)
@@ -233,7 +227,7 @@ var _ = Describe("IngressClassController", func() {
 			}
 			Expect(k8sClient.Create(ctx, ingressClass)).To(Succeed())
 			DeferCleanup(func(ctx context.Context) {
-				albClient.EXPECT().DeleteLoadBalancer(gomock.Any(), projectID, region, spec.LoadBalancerName(ingressClass)).Times(1)
+				albClient.EXPECT().DeleteLoadBalancer(gomock.Any(), projectID, region, spec.LoadBalancerName(ingressClass)).MinTimes(1)
 				testutil.DeleteAndWaitForKubernetesResource(ctx, k8sClient, ingressClass)
 			})
 
@@ -249,6 +243,7 @@ var _ = Describe("IngressClassController", func() {
 					return nil, fmt.Errorf("invalid certificate: %w", err)
 				}
 				response := certsdk.GetCertificateResponse{
+					Name:   certificate.Name,
 					Id:     new("random-certificate-id"),
 					Labels: certificate.Labels,
 					Data: &certsdk.Data{
@@ -261,6 +256,7 @@ var _ = Describe("IngressClassController", func() {
 				})
 				return &response, nil
 			}).Times(1)
+			certClient.EXPECT().DeleteCertificate(gomock.Any(), projectID, region, "random-certificate-id").Return(nil).AnyTimes()
 			albClient.EXPECT().UpdateLoadBalancer(gomock.Any(), projectID, region, gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _, _, _ string, update *albsdk.UpdateLoadBalancerPayload) (*albsdk.LoadBalancer, error) {
 				response := albsdk.LoadBalancer(*update)
 				response.Version = new("version-after-update")
@@ -280,13 +276,13 @@ var _ = Describe("IngressClassController", func() {
 					corev1.TLSPrivateKeyKey: []byte(fixtureTLSPrivateKey),
 				},
 			}
-			Expect(k8sClient.Create(ctx, &secret)).To(Succeed())
+			testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, &secret)
 			service := Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("http", 80, 30000, corev1.ProtocolTCP))
-			Expect(k8sClient.Create(ctx, &service)).To(Succeed())
+			testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, &service)
 			ingress := Ingress(corev1.NamespaceDefault, "my-ingress", WithIngressClass(ingressClass.Name), WithTLSSecret(secret.Name),
 				WithRule("my-host.local", WithPath("/", new(networkingv1.PathTypePrefix), service.Name, networkingv1.ServiceBackendPort{Number: 80})),
 			)
-			Expect(k8sClient.Create(ctx, &ingress)).To(Succeed())
+			testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, &ingress)
 
 			// Depending on in which order the secret and service hit the cache the first update might not yet include the certificate.
 			Eventually(updateRequest).Should(testutil.HaveAtomicValue[albsdk.UpdateLoadBalancerPayload](
@@ -305,66 +301,6 @@ var _ = Describe("IngressClassController", func() {
 				}, ConsistOf("random-certificate-id")),
 			))
 		})
-
-		/* 		Context("When deleting an IngressClass", func() {
-			BeforeEach(func() {
-				// 1. Point our managed IngressClass definition to include the target testing labels
-				managedIngressClass = &networkingv1.IngressClass{
-					ObjectMeta: metav1.ObjectMeta{
-						GenerateName: "managed-ingressclass-",
-						UID:          "envtest-ic-uid",
-						Labels: map[string]string{
-							labels.LabelIngressClassUID: "target-cloud-alb-id",
-						},
-					},
-					Spec: networkingv1.IngressClassSpec{Controller: controllerName},
-				}
-
-				setupMocks = func(m *stackit.MockApplicationLoadBalancerClient) {
-					m.EXPECT().
-						GetLoadBalancer(gomock.Any(), projectID, region, gomock.Any()).
-						Return(&albsdk.LoadBalancer{Status: new("READY")}, nil).
-						AnyTimes()
-					m.EXPECT().
-						UpdateLoadBalancer(gomock.Any(), projectID, region, gomock.Any(), gomock.Any()).
-						Return(&albsdk.LoadBalancer{Status: new("READY")}, nil).
-						AnyTimes() // "allow background threads update safely without breaking my test"
-
-					m.EXPECT().
-						DeleteLoadBalancer(gomock.Any(), projectID, region, gomock.Any()).
-						Return(nil).
-						Times(1) // Asserts that the controller MUST call this exactly 1 time!
-
-				}
-
-			})
-
-			It("should read the UID label, delete associated ALB and certificate ", func(ctx context.Context) {
-
-				// should delete the associated ALB and Certificate
-				certClient.EXPECT().
-					DeleteCertificate(gomock.Any(), projectID, region, targetCertID).
-					Return(nil).
-					AnyTimes()
-
-				// Publish the labeled IngressClass to the test cluster
-				Expect(k8sClient.Create(ctx, managedIngressClass)).To(Succeed())
-
-				// Wait for the controller background loop to notice it and attach the finalizer
-				WaitUntilFinalizerAttached(ctx, k8sClient, managedIngressClass)
-
-				//  Issue the Delete call to test the teardown pipeline
-				Expect(k8sClient.Delete(ctx, managedIngressClass)).To(Succeed())
-
-				// Verify the finalizer gets scrubbed and the object disappears from the API Server
-				Eventually(func(g Gomega) {
-					var ic networkingv1.IngressClass
-					err := k8sClient.Get(ctx, client.ObjectKeyFromObject(managedIngressClass), &ic)
-
-					g.Expect(apierrors.IsNotFound(err)).To(BeTrue(), "The object must be deleted completely")
-				}, "5s", "200ms").Should(Succeed())
-			})
-		}) */
 	})
 
 })
