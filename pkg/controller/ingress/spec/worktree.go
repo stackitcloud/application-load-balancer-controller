@@ -99,7 +99,7 @@ type WorkTreeCertificate struct {
 // Every ingress rule translates into 1 or 2 rules in the ALB, depending on the protocols used for that ingress.
 //
 // If existingALB is nil it is assumed that no load balancer exists yet.
-// existingALB is used to to pick up fields that are already set, most notably the version for the update payload.
+// existingALB is used to pick up fields that are already set, most notably the version for the update payload.
 //
 // The arguments must only contain data related to the ingress class.
 // I.e. all ingresses will be processed regardless of their ingress class reference.
