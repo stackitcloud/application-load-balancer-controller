@@ -546,4 +546,30 @@ var _ = Describe("WorkTreeALB", func() {
 		create := tree.ToCreatePayload(nil, "network-id", "region")
 		Expect(create.Listeners[0].Http.Hosts[0].Rules[0].Path.ExactMatch).To(HaveValue(Equal("/a")))
 	})
+
+	It("should return an error on duplicate paths", func() {
+		_, errs := BuildTree(
+			&networkingv1.IngressClass{},
+			[]networkingv1.Ingress{
+				Ingress(corev1.NamespaceDefault, "ingress-1", WithRule("my-host.local",
+					WithPath("/", new(networkingv1.PathTypePrefix), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
+				)),
+				Ingress(corev1.NamespaceDefault, "ingress-2", WithAnnotation(AnnotationPriority, "10"), WithRule("my-host.local",
+					WithPath("/", new(networkingv1.PathTypePrefix), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
+				)),
+			},
+			nil,
+			[]corev1.Service{
+				Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 80, 30000, corev1.ProtocolTCP)),
+			}, nil, nil,
+		)
+
+		Expect(errs).To(ConsistOf(
+			MatchAllFields(Fields{
+				"Ingress":     testutil.HaveName("ingress-1"),
+				"Description": Equal("Path already exists"),
+				"FieldPath":   Equal(field.NewPath("spec", "rules").Index(0).Child("paths").Index(0)),
+			}),
+		))
+	})
 })
