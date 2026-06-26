@@ -208,7 +208,13 @@ Configure the STACKIT Application Load Balancer using the following annotations.
 
 ### Known Limitations
 
-#### defaultBackend support
+#### Support for `defaultBackend`
 
 The ALB Ingress Controller currently does not support the `defaultBackend` field on Ingress resources. Customers should avoid relying on this feature as it will be ignored during ALB reconciliation.
 
+#### Dummy listener for empty application load balancers
+
+Currently, application load balancers require at least one listener.
+If the ingress class results in zero listeners, a dummy listener on port 80 is added to be able to create the load balancer.
+This listener always returns the HTTP status code 404.
+Common scenarios where this can happen is when there are zero ingresses or an HTTPS-only load balancer does not have any certificates yet.

@@ -6,6 +6,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gstruct"
+	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress/spec/testdata"
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/testutil"
 	. "github.com/stackitcloud/application-load-balancer-controller/pkg/testutil/ingress"
 	. "github.com/stackitcloud/application-load-balancer-controller/pkg/testutil/service"
@@ -174,7 +175,7 @@ var _ = Describe("WorkTreeALB", func() {
 					Type:       corev1.SecretTypeTLS,
 					Data: map[string][]byte{
 						corev1.TLSCertKey:       []byte("invalid cert"),
-						corev1.TLSPrivateKeyKey: []byte(fixtureTLSPrivateKey),
+						corev1.TLSPrivateKeyKey: []byte(testdata.FixtureTLS1PrivateKey),
 					},
 				},
 			}, nil, nil, nil,
@@ -184,7 +185,7 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(errs[0].Description).To(Equal("invalid certificate: tls: failed to find any PEM data in certificate input"))
 	})
 
-	It("should process TLS secret correctly", func() {
+	It("should process TLS secret correctly and return it as missing certificate", func() {
 		tree, errs := BuildTree(
 			&networkingv1.IngressClass{},
 			[]networkingv1.Ingress{
@@ -195,8 +196,8 @@ var _ = Describe("WorkTreeALB", func() {
 					ObjectMeta: metav1.ObjectMeta{Namespace: corev1.NamespaceDefault, Name: "my-tls"},
 					Type:       corev1.SecretTypeTLS,
 					Data: map[string][]byte{
-						corev1.TLSCertKey:       []byte(fixtureTLSPublicKey),
-						corev1.TLSPrivateKeyKey: []byte(fixtureTLSPrivateKey),
+						corev1.TLSCertKey:       []byte(testdata.FixtureTLS1PublicKey),
+						corev1.TLSPrivateKeyKey: []byte(testdata.FixtureTLS1PrivateKey),
 					},
 				},
 			}, nil, nil, nil,
@@ -205,9 +206,71 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(errs).To(BeEmpty())
 		Expect(tree.GetMissingCertificates(nil)).To(ConsistOf(
 			WorkTreeCertificate{
-				PublicKey:  fixtureTLSPublicKey,
-				PrivateKey: fixtureTLSPrivateKey,
+				PublicKey:  testdata.FixtureTLS1PublicKey,
+				PrivateKey: testdata.FixtureTLS1PrivateKey,
 			},
+		))
+	})
+
+	It("should use TLS certificates only on ports that reference it", func() {
+		tree, errs := BuildTree(
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{AnnotationHTTPSOnly: "true"}},
+			},
+			[]networkingv1.Ingress{
+				Ingress(corev1.NamespaceDefault, "ingress-a", WithTLSSecret("shared-cert"), WithTLSSecret("cert-for-a"),
+					WithRule("host-a.local", WithPath("/", new(networkingv1.PathTypePrefix), "my-service", networkingv1.ServiceBackendPort{Number: 80})),
+				),
+				Ingress(corev1.NamespaceDefault, "ingress-b", WithTLSSecret("shared-cert"), WithTLSSecret("cert-for-b"), WithAnnotation(AnnotationHTTPSPort, "444"),
+					WithRule("host-b.local", WithPath("/", new(networkingv1.PathTypePrefix), "my-service", networkingv1.ServiceBackendPort{Number: 80})),
+				),
+			},
+			[]corev1.Secret{
+				{
+					ObjectMeta: metav1.ObjectMeta{Namespace: corev1.NamespaceDefault, Name: "cert-for-a"},
+					Type:       corev1.SecretTypeTLS,
+					Data: map[string][]byte{
+						corev1.TLSCertKey:       []byte(testdata.FixtureTLS1PublicKey),
+						corev1.TLSPrivateKeyKey: []byte(testdata.FixtureTLS1PrivateKey),
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Namespace: corev1.NamespaceDefault, Name: "cert-for-b"},
+					Type:       corev1.SecretTypeTLS,
+					Data: map[string][]byte{
+						corev1.TLSCertKey:       []byte(testdata.FixtureTLS2PublicKey),
+						corev1.TLSPrivateKeyKey: []byte(testdata.FixtureTLS2PrivateKey),
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Namespace: corev1.NamespaceDefault, Name: "shared-cert"},
+					Type:       corev1.SecretTypeTLS,
+					Data: map[string][]byte{
+						corev1.TLSCertKey:       []byte(testdata.FixtureTLS3PublicKey),
+						corev1.TLSPrivateKeyKey: []byte(testdata.FixtureTLS3PrivateKey),
+					},
+				},
+			}, []corev1.Service{
+				Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 80, 30000, corev1.ProtocolTCP)),
+			}, nil, nil,
+		)
+
+		Expect(errs).To(BeEmpty())
+		create := tree.ToCreatePayload(map[CertificateFingerprint]string{
+			testdata.FixtureTLS1FingerprintSHA256: "id-cert-1",
+			testdata.FixtureTLS2FingerprintSHA256: "id-cert-2",
+			testdata.FixtureTLS3FingerprintSHA256: "id-cert-3",
+		}, "my-network", "region")
+		Expect(create.Listeners).To(HaveLen(2))
+		Expect(create.Listeners[0].Port).To(HaveValue(BeEquivalentTo(443)))
+		Expect(create.Listeners[0].Https.CertificateConfig.CertificateIds).To(ConsistOf(
+			"id-cert-1",
+			"id-cert-3",
+		))
+		Expect(create.Listeners[1].Port).To(HaveValue(BeEquivalentTo(444)))
+		Expect(create.Listeners[1].Https.CertificateConfig.CertificateIds).To(ConsistOf(
+			"id-cert-2",
+			"id-cert-3",
 		))
 	})
 
@@ -484,90 +547,3 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(create.Listeners[0].Http.Hosts[0].Rules[0].Path.ExactMatch).To(HaveValue(Equal("/a")))
 	})
 })
-
-const (
-	fixtureTLSPublicKey = `-----BEGIN CERTIFICATE-----
-MIIFmzCCA4OgAwIBAgIUbhg0VsnIT3fREtGHtyj1YYY1mkUwDQYJKoZIhvcNAQEL
-BQAwXTELMAkGA1UEBhMCREUxEzARBgNVBAgMClNvbWUtU3RhdGUxITAfBgNVBAoM
-GEludGVybmV0IFdpZGdpdHMgUHR5IEx0ZDEWMBQGA1UEAwwNbXktaG9zdC5sb2Nh
-bDAeFw0yNjA2MTYwODU4MzVaFw0yNzA2MTYwODU4MzVaMF0xCzAJBgNVBAYTAkRF
-MRMwEQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRlcm5ldCBXaWRnaXRz
-IFB0eSBMdGQxFjAUBgNVBAMMDW15LWhvc3QubG9jYWwwggIiMA0GCSqGSIb3DQEB
-AQUAA4ICDwAwggIKAoICAQDBwBCu7Bc77uMgUOslDJUObgG5FZUYWzdo6owK6Qmo
-aNfvjmwwkbMHLqu8t6ZNi9UoRTJ1G9GeM8JtPL+bikKu1ZjN2MbO6VHI3xy0Az85
-r2/FKta1faFcrV7Vul/zJqAljf4qeTK31mFmZq1is86Q0wYcEf3qnNDafN5ThGT/
-F7akDlKTDG1RmyXHw+/90TINZ6q8Rqf5kI3EV63zlrG6iRJ38Dphge8Hk+ZGjURm
-qx7Jz2iJkRGbIB53ZDEBk+KWM6K7iUbswmJv4qyat8P7Bv2Iisob9LVhU//852f+
-vdmdxoebUn6dGjsNv9lX0qKiEzcE1Lm2SPNIB3bfY5xNnKNjCT7qZ4NXKoeTTwLK
-S+gN8zcY3Sdb8kyCKmhIGA4TXsQEyhzG/YwYGE/VgOEgv324VDGB5FcT+VcjZiHD
-6nzDfqKH3NkaJ70PsCa4t3scHogkWQLnGMJd2/T+t/L3tVPZaJearexh6RUZJlIW
-gCCAMqJPoALKzGrfSHhiy5L+ghpEgSnh4ZiWYxNbPcbGOXygxOZVnNc4y1PNb+vX
-hXGU16wSoWQf8cZA0WDKiXLFz7qM6tAS49PJsHalWryE3qO741D/fOgl7Nzsi6MR
-0lMsR9pCptIPPmiY/5f6pFxgS08IJFhaxAybCEuroLLBdXBMcD2SmSP7Scm2az09
-1QIDAQABo1MwUTAdBgNVHQ4EFgQUjdu/uxlLXaaafQIdx6gZZ45cxgswHwYDVR0j
-BBgwFoAUjdu/uxlLXaaafQIdx6gZZ45cxgswDwYDVR0TAQH/BAUwAwEB/zANBgkq
-hkiG9w0BAQsFAAOCAgEAX+/DmcP+iAqOo0WaOOvM7V4Iz8EAXSRdgMgi+xPRH8Dt
-gYe1xc0eb3UJkkeOusrQKfEXbC47X905aAGACPNqLs+Mm40h8bctAqKExgFM7noM
-8OK/y1I3RjDtbCMHJ5uCanuuqgVpXuuSWOafwY21n2mPi15+wjYJlk9YOVPAXkIl
-wHpWwGv+4uuD0ppTHwF2bLFpypeVSsVLQdQ/F6H2K6QFIaHXhMZm2m1wLdD8AuiU
-1AagiwOQwnGcSzKSjptO1DjWlJOPffcAzO2zXq3HT4Y3debbiKIY5uhXJfU7u82D
-Q45dms99DN6FzFONf92NfHI48PAmHXFD8xoKOYejcsV/Fe0coccCbbj/wlReVabt
-PE0skr0z12hPkQ6+BQri2nxKqbQPCyLKQNJ4p1ku2v73TX0zd2fU+P3mV0UoFovF
-/8vOqc6J+MyrDSzvqdunEPL8pG6ziGnhC2fT2e41LYKWQqkBjFIQnEeTcr0pVdiG
-R4dGu19QV3PBoX2IbLexndiYGCJuBsKpjIu5C4Z5BibXXZdngPwpWdaoG2DZQZ2s
-okmiQzkHzZ3ADR/UVqTDICjr8gEzjZRfgwEt+jIkgEV7i5S9GS9miyzUKPi6pEuL
-JGVFbYQdFntS/izqlEV0L+3te0WKQIEX6Sq8wdxg0twpRdzaMepJiLTYi/YxJa8=
------END CERTIFICATE-----`
-	fixtureTLSPrivateKey = `-----BEGIN PRIVATE KEY-----
-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
-UoA+9Hd41MHTo2Frp1cML2BpdbK/
------END PRIVATE KEY-----`
-)

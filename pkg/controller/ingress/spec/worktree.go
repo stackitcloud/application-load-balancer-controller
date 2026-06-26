@@ -89,6 +89,8 @@ type workTreePath struct {
 type WorkTreeCertificate struct {
 	PublicKey  string
 	PrivateKey string
+	// Ports tracks all HTTPS ports that use that certificate. The values of the map are not used. Only presence matters.
+	Ports map[int16]any
 }
 
 // BuildTree creates a new work tree.
@@ -151,6 +153,10 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 	})
 	for i := range ingresses {
 		ingress := &ingresses[i]
+		httpsOnly := GetAnnotation(AnnotationHTTPSOnly, false, ingress, ingressClass)
+		httpPort := GetAnnotation(AnnotationHTTPPort, 80, ingress, ingressClass)
+		httpsPort := GetAnnotation(AnnotationHTTPSPort, 443, ingress, ingressClass)
+
 		for tlsIndex, tls := range ingress.Spec.TLS {
 			secret, exists := secretsMap[types.NamespacedName{Namespace: ingress.Namespace, Name: tls.SecretName}]
 			if !exists {
@@ -180,19 +186,20 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 				continue
 			}
 
-			tree.certificates[CertificateFingerprint(fingerprint)] = WorkTreeCertificate{
-				PublicKey:  string(secret.Data[corev1.TLSCertKey]),
-				PrivateKey: string(secret.Data[corev1.TLSPrivateKeyKey]),
+			if _, exists := tree.certificates[CertificateFingerprint(fingerprint)]; !exists {
+				tree.certificates[CertificateFingerprint(fingerprint)] = WorkTreeCertificate{
+					PublicKey:  string(secret.Data[corev1.TLSCertKey]),
+					PrivateKey: string(secret.Data[corev1.TLSPrivateKeyKey]),
+					Ports:      map[int16]any{},
+				}
 			}
+			tree.certificates[CertificateFingerprint(fingerprint)].Ports[int16(httpsPort)] = nil
 		}
+
 		for ruleIndex, rule := range ingress.Spec.Rules {
 			// TODO: support rules that don't have a path
 			for pathIndex, path := range rule.HTTP.Paths {
 				ingressPathReference := ingressPathReference{namespace: ingress.Namespace, name: ingress.Name, uid: string(ingress.UID), ruleIndex: ruleIndex, pathIndex: pathIndex}
-
-				httpsOnly := GetAnnotation(AnnotationHTTPSOnly, false, ingress, ingressClass)
-				httpPort := GetAnnotation(AnnotationHTTPPort, 80, ingress, ingressClass)
-				httpsPort := GetAnnotation(AnnotationHTTPSPort, 443, ingress, ingressClass)
 
 				targetPool, e := buildTargetPool(tree, ingressClass, targets, ingress, ruleIndex, path, pathIndex, servicesMap)
 				errors = append(errors, e...)
@@ -434,7 +441,7 @@ func (t *WorkTreeALB) GetMissingCertificates(existingCerts []certsdk.GetCertific
 	return missingCerts
 }
 
-// GetUnusedCertificates return all certificates in existingCerts that are not referenced in t.
+// GetUnusedCertificates returns all certificates in existingCerts that are not referenced in t.
 func (t *WorkTreeALB) GetUnusedCertificates(existingCerts map[CertificateFingerprint]string) map[CertificateFingerprint]string {
 	unused := maps.Clone(existingCerts)
 	for fingerprint := range t.certificates {
@@ -511,8 +518,10 @@ func (t *WorkTreeALB) ToCreatePayload( //nolint:gocyclo,funlen // Breaking up th
 					CertificateIds: []string{},
 				},
 			}
-			// TODO: Only use the certificates used for this port.
-			for fingerprint := range t.certificates {
+			for fingerprint, cert := range t.certificates {
+				if _, intendedForPort := cert.Ports[port]; !intendedForPort {
+					continue
+				}
 				if id, exists := certificateIDMap[fingerprint]; exists {
 					https.CertificateConfig.CertificateIds = append(https.CertificateConfig.CertificateIds, id)
 				}
@@ -542,7 +551,7 @@ func (t *WorkTreeALB) ToCreatePayload( //nolint:gocyclo,funlen // Breaking up th
 	if len(listeners) == 0 {
 		// The ALB doesn't allow zero listeners. To already create it we create an empty listener on port 80.
 		listeners = append(listeners, albsdk.Listener{
-			Name:     new(fmt.Sprintf("port-%d", 80)),
+			Name:     new(fmt.Sprintf("dummy-port-%d", 80)),
 			Protocol: new(string(protocolHTTP)),
 			Port:     new(int32(80)),
 			Http: &albsdk.ProtocolOptionsHTTP{
