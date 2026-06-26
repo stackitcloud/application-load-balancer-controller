@@ -262,7 +262,6 @@ func addPathToTree(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass, i
 		}
 	}
 
-	// TODO: Define a semantic for ImplementationSpecific path. According to spec it MUST be supported.
 	albPath, exists := host.paths[_pathWithType]
 	if exists && albPath.ingressPathReference == ingressPathReference {
 		errors = append(errors, ErrorEvent{
@@ -457,8 +456,9 @@ func (t WorkTreeALB) ToCreatePayload(
 		for hostname, host := range listener.hosts {
 			paths := slices.Collect(maps.Values(host.paths))
 			typeRank := map[networkingv1.PathType]int{
-				networkingv1.PathTypeExact:  1,
-				networkingv1.PathTypePrefix: 2,
+				networkingv1.PathTypeExact:                  1,
+				networkingv1.PathTypeImplementationSpecific: 2,
+				networkingv1.PathTypePrefix:                 3,
 			}
 			slices.SortFunc(paths, func(a, b *workTreePath) int {
 				if x := cmp.Compare(typeRank[a.path.pathType], typeRank[b.path.pathType]); x != 0 {
@@ -478,6 +478,10 @@ func (t WorkTreeALB) ToCreatePayload(
 
 				switch path.path.pathType {
 				case networkingv1.PathTypeExact:
+					rule.Path = new(albsdk.Path{
+						ExactMatch: new(path.path.path),
+					})
+				case networkingv1.PathTypeImplementationSpecific:
 					rule.Path = new(albsdk.Path{
 						ExactMatch: new(path.path.path),
 					})

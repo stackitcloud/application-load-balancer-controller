@@ -445,6 +445,25 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(update.Options.Observability.Logs.CredentialsRef).To(HaveValue(Equal("my-creds")))
 		Expect(update.Options.Observability.Logs.PushUrl).To(HaveValue(Equal("my-push-url")))
 	})
+
+	It("should turn implementation-specific paths into exact matchers", func() {
+		tree, errs := BuildTree(
+			&networkingv1.IngressClass{},
+			[]networkingv1.Ingress{
+				Ingress(corev1.NamespaceDefault, "ingress-1", WithRule("my-host.local",
+					WithPath("/a", new(networkingv1.PathTypeImplementationSpecific), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
+				)),
+			},
+			nil,
+			[]corev1.Service{
+				Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 80, 30000, corev1.ProtocolTCP)),
+			}, nil, nil,
+		)
+
+		Expect(errs).To(BeEmpty())
+		create := tree.ToCreatePayload(nil, "network-id", "region")
+		Expect(create.Listeners[0].Http.Hosts[0].Rules[0].Path.ExactMatch).To(HaveValue(Equal("/a")))
+	})
 })
 
 const (
