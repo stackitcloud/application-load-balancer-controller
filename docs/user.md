@@ -38,7 +38,7 @@ metadata:
   labels:
     app: service-a
 spec:
-  type: CLusterIP
+  type: NodePort
   ports:
   - port: 80
     protocol: TCP
