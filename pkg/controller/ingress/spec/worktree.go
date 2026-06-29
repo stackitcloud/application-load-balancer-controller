@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"maps"
+	"math"
 	"slices"
 	"strings"
 
@@ -156,6 +157,21 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 		httpsOnly := GetAnnotation(AnnotationHTTPSOnly, false, ingress, ingressClass)
 		httpPort := GetAnnotation(AnnotationHTTPPort, 80, ingress, ingressClass)
 		httpsPort := GetAnnotation(AnnotationHTTPSPort, 443, ingress, ingressClass)
+
+		if !httpsOnly && (httpPort <= 0 || httpPort > math.MaxUint16) {
+			errors = append(errors, ErrorEvent{
+				Ingress:     ingress,
+				Description: "HTTP port is out of range.",
+			})
+			continue
+		}
+		if len(ingress.Spec.TLS) > 0 && (httpsPort <= 0 || httpsPort > math.MaxUint16) {
+			errors = append(errors, ErrorEvent{
+				Ingress:     ingress,
+				Description: "HTTPS port is out of range.",
+			})
+			continue
+		}
 
 		for tlsIndex, tls := range ingress.Spec.TLS {
 			secret, exists := secretsMap[types.NamespacedName{Namespace: ingress.Namespace, Name: tls.SecretName}]
