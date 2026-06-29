@@ -91,7 +91,8 @@ func (r *IngressClassReconciler) Reconcile(ctx context.Context, req ctrl.Request
 }
 
 // updateStatus updates the status of the Ingresses with the ALB IP address
-func (r *IngressClassReconciler) updateStatus(ctx context.Context, ingressClass *networkingv1.IngressClass) (ctrl.Result, error) {
+func (r *IngressClassReconciler) updateStatus( //nolint:gocyclo // TODO: Make this function smaller.
+	ctx context.Context, ingressClass *networkingv1.IngressClass) (ctrl.Result, error) {
 	alb, err := r.ALBClient.GetLoadBalancer(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region, spec.LoadBalancerName(ingressClass))
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to get load balancer: %w", err)
@@ -106,7 +107,7 @@ func (r *IngressClassReconciler) updateStatus(ctx context.Context, ingressClass 
 	if alb.ExternalAddress != nil && *alb.ExternalAddress != "" {
 		albIP = *alb.ExternalAddress
 	} else if alb.Options != nil && alb.Options.PrivateNetworkOnly != nil &&
-		*alb.Options.PrivateNetworkOnly == true && alb.PrivateAddress != nil && *alb.PrivateAddress != "" {
+		*alb.Options.PrivateNetworkOnly && alb.PrivateAddress != nil && *alb.PrivateAddress != "" {
 		albIP = *alb.PrivateAddress
 	}
 

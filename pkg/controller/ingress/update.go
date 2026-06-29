@@ -19,7 +19,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func (r *IngressClassReconciler) reconcileALBResources(ctx context.Context, ingressClass *networkingv1.IngressClass) error { //nolint:gocyclo,funlen // Breaking up this function won't make it much simpler.
+func (r *IngressClassReconciler) reconcileALBResources( //nolint:gocyclo,funlen // TODO: Simplify this function.
+	ctx context.Context, ingressClass *networkingv1.IngressClass,
+) error {
 	ingresses, err := r.getIngressesForIngressClass(ctx, ingressClass)
 	if err != nil {
 		return fmt.Errorf("failed to get ingresses for class: %w", err)
@@ -143,7 +145,8 @@ func (r *IngressClassReconciler) reconcileALBResources(ctx context.Context, ingr
 // It ignores services that are not found.
 // TODO: Support resource backends (that reference services).
 func (r *IngressClassReconciler) getServicesForIngresses(ctx context.Context, ingresses []networkingv1.Ingress) ([]corev1.Service, error) {
-	// TODO: This and the next function can be generalized with a NamespacedReferenceList function. Possibly with a callback function for the indexes. Should return a map indexed with types.NamespacedName.
+	// TODO: This and the next function can be generalized with a NamespacedReferenceList function.
+	// Possibly with a callback function for the indexes. Should return a map indexed with types.NamespacedName.
 	services := []corev1.Service{}
 	for i := range ingresses {
 		ingress := ingresses[i]
@@ -214,7 +217,9 @@ func (r *IngressClassReconciler) getTLSSecretsFromIngresses(ctx context.Context,
 }
 
 // getCertificatesForIngressClass returns all certificates matching the ingress class via label.
-func (r *IngressClassReconciler) getCertificatesForIngressClass(ctx context.Context, ingressClass *networkingv1.IngressClass) ([]certsdk.GetCertificateResponse, error) {
+func (r *IngressClassReconciler) getCertificatesForIngressClass(
+	ctx context.Context, ingressClass *networkingv1.IngressClass,
+) ([]certsdk.GetCertificateResponse, error) {
 	// TODO: deal with paging
 	projectCertificates, err := r.CertificateClient.ListCertificate(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region)
 	if err != nil {
@@ -232,7 +237,9 @@ func (r *IngressClassReconciler) getCertificatesForIngressClass(ctx context.Cont
 }
 
 func updateNeeded(alb *albsdk.LoadBalancer, albPayload *albsdk.UpdateLoadBalancerPayload) bool {
-	return listenersChanged(alb.Listeners, albPayload.Listeners) || targetPoolsChanged(alb.TargetPools, albPayload.TargetPools) || optionsChanged(alb.Options, albPayload.Options)
+	return listenersChanged(alb.Listeners, albPayload.Listeners) ||
+		targetPoolsChanged(alb.TargetPools, albPayload.TargetPools) ||
+		optionsChanged(alb.Options, albPayload.Options)
 }
 
 func listenersChanged(current, desired []albsdk.Listener) bool {

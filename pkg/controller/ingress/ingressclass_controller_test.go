@@ -149,21 +149,23 @@ var _ = Describe("IngressClassController", func() {
 		certClient.EXPECT().ListCertificate(gomock.Any(), gomock.Any(), gomock.Any()).Return(new(certsdk.ListCertificatesResponse{
 			Items: []certsdk.GetCertificateResponse{},
 		}), nil).AnyTimes()
-		albClient.EXPECT().GetLoadBalancer(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _, _, _ string) (*albsdk.LoadBalancer, error) {
-			lb := getLoadBalancerResponse.Load()
-			if lb == nil {
-				return nil, stackit.ErrorNotFound
-			}
-			return lb, nil
-		}).AnyTimes()
-		albClient.EXPECT().CreateLoadBalancer(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _, _ string, create *albsdk.CreateLoadBalancerPayload) (*albsdk.LoadBalancer, error) {
-			response := albsdk.LoadBalancer(*create)
-			response.Version = new("version-after-create")
-			response.ExternalAddress = new("127.0.0.1")
-			response.Status = new(stackit.LBStatusReady)
-			getLoadBalancerResponse.Store(&response)
-			return &response, nil
-		}).Times(1)
+		albClient.EXPECT().GetLoadBalancer(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, _, _, _ string) (*albsdk.LoadBalancer, error) {
+				lb := getLoadBalancerResponse.Load()
+				if lb == nil {
+					return nil, stackit.ErrorNotFound
+				}
+				return lb, nil
+			}).AnyTimes()
+		albClient.EXPECT().CreateLoadBalancer(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, _, _ string, create *albsdk.CreateLoadBalancerPayload) (*albsdk.LoadBalancer, error) {
+				response := albsdk.LoadBalancer(*create)
+				response.Version = new("version-after-create")
+				response.ExternalAddress = new("127.0.0.1")
+				response.Status = new(stackit.LBStatusReady)
+				getLoadBalancerResponse.Store(&response)
+				return &response, nil
+			}).Times(1)
 
 		ingressClass := &networkingv1.IngressClass{
 			ObjectMeta: metav1.ObjectMeta{
@@ -198,25 +200,28 @@ var _ = Describe("IngressClassController", func() {
 			listCertificatesResponse = &atomic.Pointer[certsdk.ListCertificatesResponse]{}
 			listCertificatesResponse.Store(&certsdk.ListCertificatesResponse{Items: []certsdk.GetCertificateResponse{}})
 
-			certClient.EXPECT().ListCertificate(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _, _ string) (*certsdk.ListCertificatesResponse, error) {
-				return listCertificatesResponse.Load(), nil
-			}).AnyTimes()
+			certClient.EXPECT().ListCertificate(gomock.Any(), gomock.Any(), gomock.Any()).
+				DoAndReturn(func(_ context.Context, _, _ string) (*certsdk.ListCertificatesResponse, error) {
+					return listCertificatesResponse.Load(), nil
+				}).AnyTimes()
 
-			albClient.EXPECT().GetLoadBalancer(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _, _, _ string) (*albsdk.LoadBalancer, error) {
-				lb := getLoadBalancerResponse.Load()
-				if lb == nil {
-					return nil, stackit.ErrorNotFound
-				}
-				return lb, nil
-			}).AnyTimes()
-			albClient.EXPECT().CreateLoadBalancer(gomock.Any(), projectID, region, gomock.Any()).DoAndReturn(func(_ context.Context, _, _ string, create *albsdk.CreateLoadBalancerPayload) (*albsdk.LoadBalancer, error) {
-				response := albsdk.LoadBalancer(*create)
-				response.Version = new("version-after-create")
-				response.ExternalAddress = new("127.0.0.1")
-				response.Status = new(stackit.LBStatusReady)
-				getLoadBalancerResponse.Store(&response)
-				return &response, nil
-			}).Times(1)
+			albClient.EXPECT().GetLoadBalancer(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+				DoAndReturn(func(_ context.Context, _, _, _ string) (*albsdk.LoadBalancer, error) {
+					lb := getLoadBalancerResponse.Load()
+					if lb == nil {
+						return nil, stackit.ErrorNotFound
+					}
+					return lb, nil
+				}).AnyTimes()
+			albClient.EXPECT().CreateLoadBalancer(gomock.Any(), projectID, region, gomock.Any()).
+				DoAndReturn(func(_ context.Context, _, _ string, create *albsdk.CreateLoadBalancerPayload) (*albsdk.LoadBalancer, error) {
+					response := albsdk.LoadBalancer(*create)
+					response.Version = new("version-after-create")
+					response.ExternalAddress = new("127.0.0.1")
+					response.Status = new(stackit.LBStatusReady)
+					getLoadBalancerResponse.Store(&response)
+					return &response, nil
+				}).Times(1)
 
 			ingressClass = &networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{
@@ -238,36 +243,38 @@ var _ = Describe("IngressClassController", func() {
 
 		It("should create certificate and reference it in ALB", func(ctx context.Context) {
 			updateRequest := &atomic.Pointer[albsdk.UpdateLoadBalancerPayload]{}
-			certClient.EXPECT().CreateCertificate(gomock.Any(), projectID, region, gomock.Any()).DoAndReturn(func(_ context.Context, _, _ string, certificate *certsdk.CreateCertificatePayload) (*certsdk.GetCertificateResponse, error) {
-				fingerprint, err := spec.ValidateTLSCertAndFingerprint([]byte(*certificate.PublicKey), []byte(*certificate.PrivateKey))
-				if err != nil {
-					return nil, fmt.Errorf("invalid certificate: %w", err)
-				}
-				response := certsdk.GetCertificateResponse{
-					Name:   certificate.Name,
-					Id:     new("random-certificate-id"),
-					Labels: certificate.Labels,
-					Data: &certsdk.Data{
-						FingerprintSha256: new(fingerprint),
-					},
-					PublicKey: certificate.PublicKey,
-				}
-				listCertificatesResponse.Store(&certsdk.ListCertificatesResponse{
-					Items: []certsdk.GetCertificateResponse{response},
-				})
-				return &response, nil
-			}).Times(1)
+			certClient.EXPECT().CreateCertificate(gomock.Any(), projectID, region, gomock.Any()).
+				DoAndReturn(func(_ context.Context, _, _ string, certificate *certsdk.CreateCertificatePayload) (*certsdk.GetCertificateResponse, error) {
+					fingerprint, err := spec.ValidateTLSCertAndFingerprint([]byte(*certificate.PublicKey), []byte(*certificate.PrivateKey))
+					if err != nil {
+						return nil, fmt.Errorf("invalid certificate: %w", err)
+					}
+					response := certsdk.GetCertificateResponse{
+						Name:   certificate.Name,
+						Id:     new("random-certificate-id"),
+						Labels: certificate.Labels,
+						Data: &certsdk.Data{
+							FingerprintSha256: new(fingerprint),
+						},
+						PublicKey: certificate.PublicKey,
+					}
+					listCertificatesResponse.Store(&certsdk.ListCertificatesResponse{
+						Items: []certsdk.GetCertificateResponse{response},
+					})
+					return &response, nil
+				}).Times(1)
 			certClient.EXPECT().DeleteCertificate(gomock.Any(), projectID, region, "random-certificate-id").Return(nil).AnyTimes()
-			albClient.EXPECT().UpdateLoadBalancer(gomock.Any(), projectID, region, gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _, _, _ string, update *albsdk.UpdateLoadBalancerPayload) (*albsdk.LoadBalancer, error) {
-				response := albsdk.LoadBalancer(*update)
-				response.Version = new("version-after-update")
-				response.ExternalAddress = new("127.0.0.1")
-				response.Status = new(stackit.LBStatusReady)
-				getLoadBalancerResponse.Store(&response)
+			albClient.EXPECT().UpdateLoadBalancer(gomock.Any(), projectID, region, gomock.Any(), gomock.Any()).
+				DoAndReturn(func(_ context.Context, _, _, _ string, update *albsdk.UpdateLoadBalancerPayload) (*albsdk.LoadBalancer, error) {
+					response := albsdk.LoadBalancer(*update)
+					response.Version = new("version-after-update")
+					response.ExternalAddress = new("127.0.0.1")
+					response.Status = new(stackit.LBStatusReady)
+					getLoadBalancerResponse.Store(&response)
 
-				updateRequest.Store(update)
-				return (*albsdk.LoadBalancer)(update), nil
-			}).MinTimes(1)
+					updateRequest.Store(update)
+					return (*albsdk.LoadBalancer)(update), nil
+				}).MinTimes(1)
 
 			secret := corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: corev1.NamespaceDefault, Name: "my-tls-cert"},

@@ -37,7 +37,9 @@ func (cl certClient) DeleteCertificate(ctx context.Context, projectID, region, n
 	return err
 }
 
-func (cl certClient) CreateCertificate(ctx context.Context, projectID, region string, certificate *certsdk.CreateCertificatePayload) (*certsdk.GetCertificateResponse, error) {
+func (cl certClient) CreateCertificate(
+	ctx context.Context, projectID, region string, certificate *certsdk.CreateCertificatePayload,
+) (*certsdk.GetCertificateResponse, error) {
 	cert, err := cl.client.DefaultAPI.CreateCertificate(ctx, projectID, region).CreateCertificatePayload(*certificate).Execute()
 	if isOpenAPINotFound(err) {
 		return cert, ErrorNotFound

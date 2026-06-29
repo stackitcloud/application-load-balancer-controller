@@ -19,6 +19,7 @@ linters:
     - govet
     - importas
     - ineffassign
+    - lll
     - misspell
     - modernize
     - nakedret

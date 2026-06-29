@@ -25,7 +25,8 @@ const (
 	// It uses the trusted CAs from the operating system for validation.
 	// Can be set on IngressClass, Ingress and Service.
 	AnnotationTargetPoolTLSEnabled = "alb.stackit.cloud/target-pool-tls-enabled"
-	// AnnotationTargetPoolTLSCustomCa If set, the application load balancer enables TLS bridging with a custom CA provided as value. Is this an inlined field? What is its format? Can this be set to an empty string to reset it?
+	// AnnotationTargetPoolTLSCustomCa If set, the application load balancer enables TLS bridging with a custom CA provided as value.
+	// TODO: Is this an inlined field? What is its format? Can this be set to an empty string to reset it?
 	// Can be set on IngressClass, Ingress and Service
 	AnnotationTargetPoolTLSCustomCa = "alb.stackit.cloud/target-pool-tls-custom-ca"
 	// AnnotationTargetPoolTLSSkipCertificateValidation If true, the application load balancer enables TLS bridging but skips validation.

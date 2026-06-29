@@ -202,7 +202,10 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 				continue
 			}
 			for pathIndex, path := range rule.HTTP.Paths {
-				ingressPathReference := ingressPathReference{namespace: ingress.Namespace, name: ingress.Name, uid: string(ingress.UID), ruleIndex: ruleIndex, pathIndex: pathIndex}
+				ingressPathReference := ingressPathReference{
+					namespace: ingress.Namespace, name: ingress.Name, uid: string(ingress.UID),
+					ruleIndex: ruleIndex, pathIndex: pathIndex,
+				}
 
 				targetPool, e := buildTargetPool(tree, ingressClass, targets, ingress, ruleIndex, path, pathIndex, servicesMap)
 				errors = append(errors, e...)
@@ -244,7 +247,11 @@ func addAccessControlToTree(tree *WorkTreeALB, ingressClass *networkingv1.Ingres
 
 // addPathToTree adds the given path to tree under the given port and protocol.
 // It implicitly creates listeners and hosts that don't exist yet in tree.
-func addPathToTree(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass, ingress *networkingv1.Ingress, rule networkingv1.IngressRule, ruleIndex int, path networkingv1.HTTPIngressPath, pathIndex int, port int16, protocol protocol) (added bool, errors []ErrorEvent) {
+func addPathToTree(
+	tree *WorkTreeALB, ingressClass *networkingv1.IngressClass, ingress *networkingv1.Ingress,
+	rule networkingv1.IngressRule, ruleIndex int, path networkingv1.HTTPIngressPath, pathIndex int,
+	port int16, protocol protocol,
+) (added bool, errors []ErrorEvent) {
 	_pathWithType := pathWithType{pathType: ptr.Deref(path.PathType, networkingv1.PathTypeExact), path: path.Path}
 	ingressPathReference := ingressPathReference{namespace: ingress.Namespace, name: ingress.Name, uid: string(ingress.UID), ruleIndex: ruleIndex, pathIndex: pathIndex}
 
@@ -272,7 +279,7 @@ func addPathToTree(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass, i
 		}
 	}
 
-	albPath, exists := host.paths[_pathWithType]
+	_, exists = host.paths[_pathWithType]
 	if exists {
 		errors = append(errors, ErrorEvent{
 			Ingress:     ingress,
@@ -281,7 +288,7 @@ func addPathToTree(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass, i
 		})
 		return false, errors
 	}
-	albPath = &workTreePath{
+	albPath := &workTreePath{
 		path:                 _pathWithType,
 		ingressPathReference: ingressPathReference,
 		websocket:            GetAnnotation(AnnotationWebSocket, false, ingress, ingressClass),
@@ -300,7 +307,10 @@ func addPathToTree(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass, i
 //
 // This function doesn't mutate tree or any other arguments.
 // If the target pool is not valid nil is returned together with a list of errors.
-func buildTargetPool(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass, targets []albsdk.Target, ingress *networkingv1.Ingress, ruleIndex int, path networkingv1.HTTPIngressPath, pathIndex int, servicesMap map[types.NamespacedName]corev1.Service) (*albsdk.TargetPool, []ErrorEvent) {
+func buildTargetPool(
+	tree *WorkTreeALB, ingressClass *networkingv1.IngressClass, targets []albsdk.Target, ingress *networkingv1.Ingress,
+	ruleIndex int, path networkingv1.HTTPIngressPath, pathIndex int, servicesMap map[types.NamespacedName]corev1.Service,
+) (*albsdk.TargetPool, []ErrorEvent) {
 	errors := []ErrorEvent{}
 
 	ingressPathReference := ingressPathReference{namespace: ingress.Namespace, name: ingress.Name, uid: string(ingress.UID), ruleIndex: ruleIndex, pathIndex: pathIndex}
