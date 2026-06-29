@@ -28,7 +28,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: manager
-          image: ghcr.io/stackitcloud/application-load-balancer-controller:v0.0.1-dev1
+          image: ghcr.io/stackitcloud/application-load-balancer-controller:v0.0.1-dev2
           imagePullPolicy: IfNotPresent
           args:
             - --cloud-config=/etc/stackit-alb/cloud-config.yaml
