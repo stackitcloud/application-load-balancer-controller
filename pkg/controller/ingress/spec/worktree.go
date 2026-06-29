@@ -38,7 +38,7 @@ type WorkTreeALB struct {
 	internalLB    bool
 	externalIP    string
 
-	listeners map[int16]*workTreeListener
+	listeners map[uint16]*workTreeListener
 	// We can already create the real type because there is nothing to merge or track.
 	targetPools  map[ingressPathReference]*albsdk.TargetPool
 	certificates map[CertificateFingerprint]WorkTreeCertificate
@@ -91,7 +91,7 @@ type WorkTreeCertificate struct {
 	PublicKey  string
 	PrivateKey string
 	// Ports tracks all HTTPS ports that use that certificate. The values of the map are not used. Only presence matters.
-	Ports map[int16]any
+	Ports map[uint16]any
 }
 
 // BuildTree creates a new work tree.
@@ -134,7 +134,7 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 		internalLB:   GetAnnotation(AnnotationInternal, false, ingressClass),
 		externalIP:   GetAnnotation(AnnotationExternalIP, "", ingressClass),
 
-		listeners:    map[int16]*workTreeListener{},
+		listeners:    map[uint16]*workTreeListener{},
 		targetPools:  map[ingressPathReference]*albsdk.TargetPool{},
 		existingALB:  existingALB,
 		certificates: map[CertificateFingerprint]WorkTreeCertificate{},
@@ -206,10 +206,10 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 				tree.certificates[CertificateFingerprint(fingerprint)] = WorkTreeCertificate{
 					PublicKey:  string(secret.Data[corev1.TLSCertKey]),
 					PrivateKey: string(secret.Data[corev1.TLSPrivateKeyKey]),
-					Ports:      map[int16]any{},
+					Ports:      map[uint16]any{},
 				}
 			}
-			tree.certificates[CertificateFingerprint(fingerprint)].Ports[int16(httpsPort)] = nil
+			tree.certificates[CertificateFingerprint(fingerprint)].Ports[uint16(httpsPort)] = nil
 		}
 
 		for ruleIndex, rule := range ingress.Spec.Rules {
@@ -231,11 +231,11 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 
 				var httpAdded, httpsAdded bool
 				if !httpsOnly {
-					httpAdded, e = addPathToTree(tree, ingressClass, ingress, rule, ruleIndex, path, pathIndex, int16(httpPort), protocolHTTP)
+					httpAdded, e = addPathToTree(tree, ingressClass, ingress, rule, ruleIndex, path, pathIndex, uint16(httpPort), protocolHTTP)
 					errors = append(errors, e...)
 				}
 				if len(ingress.Spec.TLS) > 0 {
-					httpsAdded, e = addPathToTree(tree, ingressClass, ingress, rule, ruleIndex, path, pathIndex, int16(httpsPort), protocolHTTPS)
+					httpsAdded, e = addPathToTree(tree, ingressClass, ingress, rule, ruleIndex, path, pathIndex, uint16(httpsPort), protocolHTTPS)
 					errors = append(errors, e...)
 				}
 
@@ -266,7 +266,7 @@ func addAccessControlToTree(tree *WorkTreeALB, ingressClass *networkingv1.Ingres
 func addPathToTree(
 	tree *WorkTreeALB, ingressClass *networkingv1.IngressClass, ingress *networkingv1.Ingress,
 	rule networkingv1.IngressRule, ruleIndex int, path networkingv1.HTTPIngressPath, pathIndex int,
-	port int16, protocol protocol,
+	port uint16, protocol protocol,
 ) (added bool, errors []ErrorEvent) {
 	_pathWithType := pathWithType{pathType: ptr.Deref(path.PathType, networkingv1.PathTypeExact), path: path.Path}
 	ingressPathReference := ingressPathReference{namespace: ingress.Namespace, name: ingress.Name, uid: string(ingress.UID), ruleIndex: ruleIndex, pathIndex: pathIndex}
