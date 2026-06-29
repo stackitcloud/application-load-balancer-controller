@@ -208,6 +208,10 @@ Configure the STACKIT Application Load Balancer using the following annotations.
 
 ### Known Limitations
 
+#### Backend Services must be of type `NodePort`
+
+The controller currently only supports routing traffic to backend Services of `type: NodePort` (or `LoadBalancer`, which also allocates a NodePort). Services of type `ClusterIP` cannot be used as backends because the ALB needs a node-reachable port to forward traffic to.
+
 #### Support for `defaultBackend`
 
 The ALB Ingress Controller currently does not support the `defaultBackend` field on Ingress resources. Customers should avoid relying on this feature as it will be ignored during ALB reconciliation.
