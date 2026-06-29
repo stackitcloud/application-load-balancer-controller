@@ -23,3 +23,5 @@ __debug_*
 test/e2e/inventory*
 test/e2e/sa-key*
 test/e2e/kubeconfig*
+
+/deploy
