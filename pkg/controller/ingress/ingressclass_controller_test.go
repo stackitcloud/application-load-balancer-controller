@@ -93,7 +93,6 @@ var _ = Describe("IngressClassController", func() {
 		reconciler := ingress.IngressClassReconciler{
 			Recorder:          recorder,
 			Client:            mgr.GetClient(),
-			Scheme:            mgr.GetScheme(),
 			ALBClient:         albClient,
 			CertificateClient: certClient,
 			ALBConfig: stackitconfig.ALBConfig{

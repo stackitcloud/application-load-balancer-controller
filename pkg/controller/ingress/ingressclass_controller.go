@@ -10,7 +10,6 @@ import (
 	stackitconfig "github.com/stackitcloud/application-load-balancer-controller/pkg/stackit/config"
 	networkingv1 "k8s.io/api/networking/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,7 +37,6 @@ type IngressClassReconciler struct { //nolint:revive // Naming this ClassReconci
 	Recorder          record.EventRecorder
 	ALBClient         stackit.ApplicationLoadBalancerClient
 	CertificateClient stackit.CertificatesClient
-	Scheme            *runtime.Scheme
 	ALBConfig         stackitconfig.ALBConfig
 }
 
