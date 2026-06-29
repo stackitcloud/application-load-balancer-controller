@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: application-load-balancer-controller
+  namespace: stackit-alb-system
+  labels:
+    app.kubernetes.io/name: application-load-balancer-controller
+    app.kubernetes.io/part-of: stackit-alb
+spec:
+  # Leader election is enabled, so it is safe to scale up for HA.
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: application-load-balancer-controller
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: application-load-balancer-controller
+        app.kubernetes.io/part-of: stackit-alb
+    spec:
+      serviceAccountName: application-load-balancer-controller
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: manager
+          image: ghcr.io/stackitcloud/application-load-balancer-controller:v0.0.1-dev1
+          imagePullPolicy: IfNotPresent
+          args:
+            - --cloud-config=/etc/stackit-alb/cloud-config.yaml
+            - --leader-elect=true
+            - --leader-election-namespace=stackit-alb-system
+            - --health-probe-bind-address=:8081
+            - --metrics-bind-address=:8080
+            - --zap-log-level=info
+          env:
+            # The STACKIT SDK picks up the service-account key from this path.
+            - name: STACKIT_SERVICE_ACCOUNT_KEY_PATH
+              value: /etc/stackit-alb/sa-key.json
+          ports:
+            - name: metrics
+              containerPort: 8080
+              protocol: TCP
+            - name: probes
+              containerPort: 8081
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: probes
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: probes
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: config
+              mountPath: /etc/stackit-alb
+              readOnly: true
+      volumes:
+        - name: config
+          secret:
+            secretName: application-load-balancer-controller-config
+            defaultMode: 0o400
+      terminationGracePeriodSeconds: 30

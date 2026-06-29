@@ -1,0 +1,128 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: application-load-balancer-controller
+  labels:
+    app.kubernetes.io/name: application-load-balancer-controller
+    app.kubernetes.io/part-of: stackit-alb
+rules:
+  # IngressClasses are watched and a finalizer is added/removed.
+  - apiGroups:
+      - networking.k8s.io
+    resources:
+      - ingressclasses
+    verbs:
+      - get
+      - list
+      - watch
+      - update
+      - patch
+  # Ingresses are watched and their status is updated.
+  - apiGroups:
+      - networking.k8s.io
+    resources:
+      - ingresses
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - networking.k8s.io
+    resources:
+      - ingresses/status
+    verbs:
+      - get
+      - update
+      - patch
+  # Backend Services and TLS Secrets are read to build the ALB configuration.
+  - apiGroups:
+      - ""
+    resources:
+      - services
+      - secrets
+    verbs:
+      - get
+      - list
+      - watch
+  # Nodes are watched to derive ALB target IPs.
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+    verbs:
+      - get
+      - list
+      - watch
+  # Emit events for ingress/ingressclass reconciliations.
+  - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - create
+      - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: application-load-balancer-controller
+  labels:
+    app.kubernetes.io/name: application-load-balancer-controller
+    app.kubernetes.io/part-of: stackit-alb
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: application-load-balancer-controller
+subjects:
+  - kind: ServiceAccount
+    name: application-load-balancer-controller
+    namespace: stackit-alb-system
+---
+# Permissions required by controller-runtime to perform leader election in the
+# controller's own namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: application-load-balancer-controller-leader-election
+  namespace: stackit-alb-system
+  labels:
+    app.kubernetes.io/name: application-load-balancer-controller
+    app.kubernetes.io/part-of: stackit-alb
+rules:
+  - apiGroups:
+      - coordination.k8s.io
+    resources:
+      - leases
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+  - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - create
+      - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: application-load-balancer-controller-leader-election
+  namespace: stackit-alb-system
+  labels:
+    app.kubernetes.io/name: application-load-balancer-controller
+    app.kubernetes.io/part-of: stackit-alb
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: application-load-balancer-controller-leader-election
+subjects:
+  - kind: ServiceAccount
+    name: application-load-balancer-controller
+    namespace: stackit-alb-system
