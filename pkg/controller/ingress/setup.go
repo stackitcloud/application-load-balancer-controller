@@ -66,7 +66,6 @@ func (r *IngressClassReconciler) SetupWithManager(ctx context.Context, mgr ctrl.
 		refs := []string{}
 		for i := range ingress.Spec.TLS {
 			refs = append(refs, ingress.Spec.TLS[i].SecretName)
-
 		}
 		return refs
 	}); err != nil {

@@ -59,7 +59,9 @@ func (cl applicationLoadBalancerClient) DeleteLoadBalancer(ctx context.Context, 
 }
 
 // CreateLoadBalancer returns ErrorNotFound if the project is not enabled.
-func (cl applicationLoadBalancerClient) CreateLoadBalancer(ctx context.Context, projectID, region string, create *albsdk.CreateLoadBalancerPayload) (*albsdk.LoadBalancer, error) {
+func (cl applicationLoadBalancerClient) CreateLoadBalancer(
+	ctx context.Context, projectID, region string, create *albsdk.CreateLoadBalancerPayload,
+) (*albsdk.LoadBalancer, error) {
 	lb, err := cl.client.DefaultAPI.CreateLoadBalancer(ctx, projectID, region).CreateLoadBalancerPayload(*create).XRequestID(uuid.NewString()).Execute()
 	if isOpenAPINotFound(err) {
 		return lb, ErrorNotFound
@@ -73,7 +75,9 @@ func (cl applicationLoadBalancerClient) UpdateLoadBalancer(ctx context.Context, 
 	return cl.client.DefaultAPI.UpdateLoadBalancer(ctx, projectID, region, name).UpdateLoadBalancerPayload(*update).Execute()
 }
 
-func (cl applicationLoadBalancerClient) UpdateTargetPool(ctx context.Context, projectID, region, name, targetPoolName string, payload albsdk.UpdateTargetPoolPayload) error {
+func (cl applicationLoadBalancerClient) UpdateTargetPool(
+	ctx context.Context, projectID, region, name, targetPoolName string, payload albsdk.UpdateTargetPoolPayload,
+) error {
 	_, err := cl.client.DefaultAPI.UpdateTargetPool(ctx, projectID, region, name, targetPoolName).UpdateTargetPoolPayload(payload).Execute()
 	return err
 }
@@ -95,7 +99,9 @@ func (cl applicationLoadBalancerClient) GetCredentials(ctx context.Context, proj
 	return cl.client.DefaultAPI.GetCredentials(ctx, projectID, region, credentialsRef).Execute()
 }
 
-func (cl applicationLoadBalancerClient) UpdateCredentials(ctx context.Context, projectID, region, credentialsRef string, payload albsdk.UpdateCredentialsPayload) error {
+func (cl applicationLoadBalancerClient) UpdateCredentials(
+	ctx context.Context, projectID, region, credentialsRef string, payload albsdk.UpdateCredentialsPayload,
+) error {
 	_, err := cl.client.DefaultAPI.UpdateCredentials(ctx, projectID, region, credentialsRef).UpdateCredentialsPayload(payload).Execute()
 	if err != nil {
 		return err

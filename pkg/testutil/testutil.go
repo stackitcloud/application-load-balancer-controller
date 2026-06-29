@@ -15,7 +15,9 @@ func DeleteAndWaitForKubernetesResource(ctx context.Context, cl client.Client, o
 	GinkgoHelper()
 	Expect(cl.Delete(ctx, obj)).To(Succeed())
 	Eventually(func(g Gomega, ctx context.Context) {
-		g.Expect(cl.Get(ctx, client.ObjectKeyFromObject(obj), obj)).Should(WithTransform(apierrors.IsNotFound, BeTrue()), "Expected resource %s to eventually be deleted", client.ObjectKeyFromObject(obj))
+		g.Expect(cl.Get(ctx, client.ObjectKeyFromObject(obj), obj)).Should(
+			WithTransform(apierrors.IsNotFound, BeTrue()),
+			"Expected resource %s to eventually be deleted", client.ObjectKeyFromObject(obj))
 	}).WithContext(ctx).Should(Succeed())
 }
 
