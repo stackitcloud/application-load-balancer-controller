@@ -577,6 +577,12 @@ func (t *WorkTreeALB) ToCreatePayload( //nolint:gocyclo,funlen // Breaking up th
 	if t.externalIP != "" {
 		externalAddress = new(t.externalIP)
 	}
+	ephemeralAddress := new(false)
+	if t.externalIP == "" && !t.internalLB {
+		// Counter-intuitively an internal LB must set ephemeral address to false.
+		// So the only case where the values needs to be set to true is for public LBs without an existing IP.
+		ephemeralAddress = new(true)
+	}
 
 	return &albsdk.CreateLoadBalancerPayload{
 		DisableTargetSecurityGroupAssignment: new(true), // TODO: Make this configurable via flag.
@@ -593,7 +599,7 @@ func (t *WorkTreeALB) ToCreatePayload( //nolint:gocyclo,funlen // Breaking up th
 		},
 		ExternalAddress: externalAddress,
 		Options: &albsdk.LoadBalancerOptions{
-			EphemeralAddress:   new(t.externalIP == ""),
+			EphemeralAddress:   ephemeralAddress,
 			AccessControl:      t.accessControl,
 			PrivateNetworkOnly: new(t.internalLB),
 		},
