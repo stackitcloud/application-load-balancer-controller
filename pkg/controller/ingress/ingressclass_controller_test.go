@@ -302,6 +302,8 @@ var _ = Describe("IngressClassController", func() {
 				}, ConsistOf("random-certificate-id")),
 			))
 		})
+
+		// TODO: Test changes to nodes
 	})
 
 })
