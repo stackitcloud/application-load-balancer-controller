@@ -17,8 +17,6 @@ const (
 
 	ProtocolHTTP  = "PROTOCOL_HTTP"
 	ProtocolHTTPS = "PROTOCOL_HTTPS"
-
-	ProjectStatusDisabled ProjectStatus = "STATUS_DISABLED"
 )
 
 type ApplicationLoadBalancerClient interface {

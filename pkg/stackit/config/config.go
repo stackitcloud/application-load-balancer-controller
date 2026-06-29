@@ -15,8 +15,6 @@ type GlobalOpts struct {
 }
 
 type APIEndpoints struct {
-	IaasAPI                               string `yaml:"iaasApi"`
-	LoadBalancerAPI                       string `yaml:"loadBalancerApi"`
 	ApplicationLoadBalancerAPI            string `yaml:"applicationLoadBalancerApi"`
 	ApplicationLoadBalancerCertificateAPI string `yaml:"applicationLoadBalancerCertificateApi"`
 }

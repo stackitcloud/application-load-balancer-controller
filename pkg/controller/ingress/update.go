@@ -2,7 +2,6 @@ package ingress
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 
@@ -43,10 +42,10 @@ func (r *IngressClassReconciler) reconcileALBResources( //nolint:gocyclo,funlen 
 	}
 
 	existingALB, err := r.ALBClient.GetLoadBalancer(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region, spec.LoadBalancerName(ingressClass))
-	if err != nil && !errors.Is(err, stackit.ErrorNotFound) {
+	if err != nil && !stackit.IsNotFound(err) {
 		return fmt.Errorf("failed to get load balancer: %w", err)
 	}
-	if errors.Is(err, stackit.ErrorNotFound) {
+	if stackit.IsNotFound(err) {
 		existingALB = nil
 	}
 
