@@ -388,7 +388,7 @@ func buildTargetPool(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass,
 			},
 			HealthyThreshold:   new(int32(1)),
 			Interval:           new("5s"),
-			IntervalJitter:     new("0s"),
+			IntervalJitter:     new("1s"),
 			Timeout:            new("3s"),
 			UnhealthyThreshold: new(int32(3)),
 		}
