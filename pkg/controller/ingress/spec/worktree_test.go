@@ -396,6 +396,7 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(errs).To(BeEmpty())
 		create := tree.ToCreatePayload(nil, "network-id", "region")
 		Expect(create.Options.PrivateNetworkOnly).To(HaveValue(BeTrue()))
+		Expect(create.Options.EphemeralAddress).To(HaveValue(BeFalse()))
 	})
 
 	It("should set ALB to static if annotation contains IP", func() {

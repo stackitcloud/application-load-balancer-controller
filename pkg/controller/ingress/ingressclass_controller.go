@@ -105,7 +105,8 @@ func (r *IngressClassReconciler) updateStatus(ctx context.Context, ingressClass 
 	var albIP string
 	if alb.ExternalAddress != nil && *alb.ExternalAddress != "" {
 		albIP = *alb.ExternalAddress
-	} else if alb.PrivateAddress != nil && *alb.PrivateAddress != "" {
+	} else if alb.Options != nil && alb.Options.PrivateNetworkOnly != nil &&
+		*alb.Options.PrivateNetworkOnly == true && alb.PrivateAddress != nil && *alb.PrivateAddress != "" {
 		albIP = *alb.PrivateAddress
 	}
 
