@@ -56,9 +56,7 @@ func main() {
 		"leader election will use for holding the leader lock.")
 	flag.StringVar(&opts.cloudConfig, "cloud-config", "cloud.yaml", "The path to the cloud config file.")
 
-	zapOpts := zap.Options{
-		Development: true,
-	}
+	zapOpts := zap.Options{}
 	zapOpts.BindFlags(flag.CommandLine)
 	flag.Parse()
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zapOpts)))
