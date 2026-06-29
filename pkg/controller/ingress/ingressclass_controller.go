@@ -89,7 +89,7 @@ func (r *IngressClassReconciler) updateStatus(ctx context.Context, ingressClass 
 		return ctrl.Result{}, fmt.Errorf("failed to get load balancer: %w", err)
 	}
 
-	if *alb.Status != stackit.LBStatusReady {
+	if alb.Status == nil || *alb.Status != stackit.LBStatusReady {
 		// ALB is not yet ready, requeue
 		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 	}
