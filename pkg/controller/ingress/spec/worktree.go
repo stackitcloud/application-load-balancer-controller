@@ -613,7 +613,7 @@ func (t *WorkTreeALB) ToCreatePayload( //nolint:gocyclo,funlen // Breaking up th
 
 	return &albsdk.CreateLoadBalancerPayload{
 		DisableTargetSecurityGroupAssignment: new(true), // TODO: Make this configurable via flag.
-		Name:                                 new(fmt.Sprintf("k8s-ingress-%s", t.ingressClass.UID)),
+		Name:                                 new(LoadBalancerName(t.ingressClass)),
 		Labels: &map[string]string{
 			"ingress-class-uid": string(t.ingressClass.UID),
 		},
