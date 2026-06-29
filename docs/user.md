@@ -134,10 +134,6 @@ The field `Ingress.spec.tls.hosts` is ignored by the controller. The ALB takes t
 
 Currently, the STACKIT ALB Ingress controller only supports Kubernetes Service backends. Routing traffic to Resource backends (such as individual Pods or other custom resources) is not supported at this time.
 
-### Validating Webhook
-
-The ALB integration deploys a background validating webhook running alongside the ALB Ingress controller. This webhook automatically reviews incoming Ingress and IngressClass object modifications (creations and updates) preventing invalid properties or conflicting parameters from being applied.
-
 ### Optimizing traffic with externalTrafficPolicy
 
 By default, Kubernetes Services use `externalTrafficPolicy: Cluster`. Under this policy, every worker node passes the ALB's health checks because kube-proxy accepts the incoming traffic on any node and automatically routes it over the internal network to a node that is actually running your pod.
