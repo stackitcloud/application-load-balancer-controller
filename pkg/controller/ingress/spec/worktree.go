@@ -316,15 +316,13 @@ func buildTargetPool(
 	ingressPathReference := ingressPathReference{namespace: ingress.Namespace, name: ingress.Name, uid: string(ingress.UID), ruleIndex: ruleIndex, pathIndex: pathIndex}
 
 	_, exists := tree.targetPools[ingressPathReference]
-	if !exists {
-		if len(tree.targetPools) >= LimitTargetPools {
-			errors = append(errors, ErrorEvent{
-				Ingress:     ingress,
-				FieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("paths").Index(pathIndex),
-				Description: "Target pool limit reached. Path will be ignored.",
-			})
-			return nil, errors
-		}
+	if !exists && len(tree.targetPools) >= LimitTargetPools {
+		errors = append(errors, ErrorEvent{
+			Ingress:     ingress,
+			FieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("paths").Index(pathIndex),
+			Description: "Target pool limit reached. Path will be ignored.",
+		})
+		return nil, errors
 	}
 	targetPool := &albsdk.TargetPool{}
 
