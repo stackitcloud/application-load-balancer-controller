@@ -95,32 +95,7 @@ func secretEventHandler(c client.Client) handler.EventHandler {
 		if !ok || secret.Type != corev1.SecretTypeTLS {
 			return nil
 		}
-
-		ingresses := &networkingv1.IngressList{}
-		err := c.List(ctx, ingresses, client.InNamespace(secret.Namespace), client.MatchingFields{fieldIndexSecret: secret.Name})
-		if err != nil {
-			return nil
-		}
-
-		classes := map[string]any{}
-		for i := range ingresses.Items {
-			ingress := &ingresses.Items[i]
-			if ingress.Spec.IngressClassName != nil && *ingress.Spec.IngressClassName != "" {
-				classes[*ingress.Spec.IngressClassName] = nil
-			}
-		}
-
-		reqs := []ctrl.Request{}
-		for className := range classes {
-			class := &networkingv1.IngressClass{}
-			if err := c.Get(ctx, types.NamespacedName{Name: className}, class); err != nil {
-				continue
-			}
-			if class.Spec.Controller == controllerName {
-				reqs = append(reqs, reconcile.Request{NamespacedName: types.NamespacedName{Name: className}})
-			}
-		}
-		return reqs
+		return ingressClassRequestsForReferencingIngresses(ctx, c, secret.Namespace, fieldIndexSecret, secret.Name)
 	})
 }
 
@@ -131,33 +106,38 @@ func serviceEventHandler(c client.Client) handler.EventHandler {
 		if !ok {
 			return nil
 		}
-
-		ingresses := &networkingv1.IngressList{}
-		err := c.List(ctx, ingresses, client.InNamespace(service.Namespace), client.MatchingFields{fieldIndexService: service.Name})
-		if err != nil {
-			return nil
-		}
-
-		classes := map[string]any{}
-		for i := range ingresses.Items {
-			ingress := &ingresses.Items[i]
-			if ingress.Spec.IngressClassName != nil && *ingress.Spec.IngressClassName != "" {
-				classes[*ingress.Spec.IngressClassName] = nil
-			}
-		}
-
-		reqs := []ctrl.Request{}
-		for className := range classes {
-			class := &networkingv1.IngressClass{}
-			if err := c.Get(ctx, types.NamespacedName{Name: className}, class); err != nil {
-				continue
-			}
-			if class.Spec.Controller == controllerName {
-				reqs = append(reqs, reconcile.Request{NamespacedName: types.NamespacedName{Name: className}})
-			}
-		}
-		return reqs
+		return ingressClassRequestsForReferencingIngresses(ctx, c, service.Namespace, fieldIndexService, service.Name)
 	})
+}
+
+// ingressClassRequestsForReferencingIngresses lists all ingresses in the given namespace that reference an object
+// (identified via the provided field index and value) and returns reconcile requests for all unique ALB-controlled
+// ingress classes those ingresses belong to.
+func ingressClassRequestsForReferencingIngresses(ctx context.Context, c client.Client, namespace, fieldIndex, value string) []ctrl.Request {
+	ingresses := &networkingv1.IngressList{}
+	if err := c.List(ctx, ingresses, client.InNamespace(namespace), client.MatchingFields{fieldIndex: value}); err != nil {
+		return nil
+	}
+
+	classes := map[string]any{}
+	for i := range ingresses.Items {
+		ingress := &ingresses.Items[i]
+		if ingress.Spec.IngressClassName != nil && *ingress.Spec.IngressClassName != "" {
+			classes[*ingress.Spec.IngressClassName] = nil
+		}
+	}
+
+	reqs := []ctrl.Request{}
+	for className := range classes {
+		class := &networkingv1.IngressClass{}
+		if err := c.Get(ctx, types.NamespacedName{Name: className}, class); err != nil {
+			continue
+		}
+		if class.Spec.Controller == controllerName {
+			reqs = append(reqs, reconcile.Request{NamespacedName: types.NamespacedName{Name: className}})
+		}
+	}
+	return reqs
 }
 
 func nodeEventHandler(c client.Client) handler.EventHandler {
