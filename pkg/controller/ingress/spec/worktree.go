@@ -526,9 +526,9 @@ func (t *WorkTreeALB) ToCreatePayload( //nolint:gocyclo,funlen // Breaking up th
 		}
 
 		var https *albsdk.ProtocolOptionsHTTPS
-		protocol := "PROTOCOL_HTTP"
+		prot := protocolHTTP
 		if listener.protocol == protocolHTTPS {
-			protocol = "PROTOCOL_HTTPS"
+			prot = protocolHTTPS
 			https = &albsdk.ProtocolOptionsHTTPS{
 				CertificateConfig: &albsdk.CertificateConfig{
 					CertificateIds: []string{},
@@ -555,7 +555,7 @@ func (t *WorkTreeALB) ToCreatePayload( //nolint:gocyclo,funlen // Breaking up th
 		listeners = append(listeners, albsdk.Listener{
 			Name:          new(fmt.Sprintf("port-%d", port)),
 			WafConfigName: waf,
-			Protocol:      &protocol,
+			Protocol:      new(string(prot)),
 			Port:          new(int32(port)),
 			Http: &albsdk.ProtocolOptionsHTTP{
 				Hosts: hosts,
