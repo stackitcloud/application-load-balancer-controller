@@ -198,6 +198,9 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 
 		for ruleIndex, rule := range ingress.Spec.Rules {
 			// TODO: support rules that don't have a path
+			if rule.HTTP == nil {
+				continue
+			}
 			for pathIndex, path := range rule.HTTP.Paths {
 				ingressPathReference := ingressPathReference{namespace: ingress.Namespace, name: ingress.Name, uid: string(ingress.UID), ruleIndex: ruleIndex, pathIndex: pathIndex}
 
@@ -310,12 +313,20 @@ func buildTargetPool(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass,
 				FieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("paths").Index(pathIndex),
 				Description: "Target pool limit reached. Path will be ignored.",
 			})
+			return nil, errors
 		}
 	}
 	targetPool := &albsdk.TargetPool{}
 
 	// TODO: Support other backends than services.
-
+	if path.Backend.Service == nil {
+		errors = append(errors, ErrorEvent{
+			Ingress:     ingress,
+			FieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("paths").Index(pathIndex).Child("backend"),
+			Description: "Backend of path isn't a service.",
+		})
+		return nil, errors
+	}
 	service, exists := servicesMap[types.NamespacedName{Namespace: ingress.Namespace, Name: path.Backend.Service.Name}]
 	if !exists {
 		errors = append(errors, ErrorEvent{
@@ -484,11 +495,7 @@ func (t *WorkTreeALB) ToCreatePayload( //nolint:gocyclo,funlen // Breaking up th
 				}
 
 				switch path.path.pathType {
-				case networkingv1.PathTypeExact:
-					rule.Path = new(albsdk.Path{
-						ExactMatch: new(path.path.path),
-					})
-				case networkingv1.PathTypeImplementationSpecific:
+				case networkingv1.PathTypeExact, networkingv1.PathTypeImplementationSpecific:
 					rule.Path = new(albsdk.Path{
 						ExactMatch: new(path.path.path),
 					})

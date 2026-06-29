@@ -2,6 +2,7 @@ package ingress
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 
 	corev1 "k8s.io/api/core/v1"
@@ -27,18 +28,20 @@ const (
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *IngressClassReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, ctrlName string) error {
-	mgr.GetCache().IndexField(ctx, &networkingv1.Ingress{}, fieldIndexIngressClass, func(o client.Object) []string {
+	if err := mgr.GetCache().IndexField(ctx, &networkingv1.Ingress{}, fieldIndexIngressClass, func(o client.Object) []string {
 		ingress := o.(*networkingv1.Ingress)
 		if ingress.Spec.IngressClassName == nil {
 			return nil
 		}
 		return []string{*ingress.Spec.IngressClassName}
-	})
+	}); err != nil {
+		return fmt.Errorf("failed to index ingress class on ingresses: %w", err)
+	}
 
-	mgr.GetCache().IndexField(ctx, &networkingv1.Ingress{}, fieldIndexService, func(o client.Object) []string {
+	if err := mgr.GetCache().IndexField(ctx, &networkingv1.Ingress{}, fieldIndexService, func(o client.Object) []string {
 		ingress := o.(*networkingv1.Ingress)
 		refs := []string{}
-		if ingress.Spec.DefaultBackend != nil && ingress.Spec.DefaultBackend.Service.Name != "" {
+		if ingress.Spec.DefaultBackend != nil && ingress.Spec.DefaultBackend.Service != nil && ingress.Spec.DefaultBackend.Service.Name != "" {
 			refs = append(refs, ingress.Spec.DefaultBackend.Service.Name)
 		}
 		for i := range ingress.Spec.Rules {
@@ -54,9 +57,11 @@ func (r *IngressClassReconciler) SetupWithManager(ctx context.Context, mgr ctrl.
 			}
 		}
 		return refs
-	})
+	}); err != nil {
+		return fmt.Errorf("failed to index services on ingresses: %w", err)
+	}
 
-	mgr.GetCache().IndexField(ctx, &networkingv1.Ingress{}, fieldIndexSecret, func(o client.Object) []string {
+	if err := mgr.GetCache().IndexField(ctx, &networkingv1.Ingress{}, fieldIndexSecret, func(o client.Object) []string {
 		ingress := o.(*networkingv1.Ingress)
 		refs := []string{}
 		for i := range ingress.Spec.TLS {
@@ -64,7 +69,9 @@ func (r *IngressClassReconciler) SetupWithManager(ctx context.Context, mgr ctrl.
 
 		}
 		return refs
-	})
+	}); err != nil {
+		return fmt.Errorf("failed to index secrets on ingresses: %w", err)
+	}
 
 	if ctrlName == "" {
 		ctrlName = "ingressclass"
@@ -98,7 +105,7 @@ func secretEventHandler(c client.Client) handler.EventHandler {
 		classes := map[string]any{}
 		for i := range ingresses.Items {
 			ingress := &ingresses.Items[i]
-			if ingress.Spec.IngressClassName != nil && *ingress.Spec.IngressClassName == "" {
+			if ingress.Spec.IngressClassName != nil && *ingress.Spec.IngressClassName != "" {
 				classes[*ingress.Spec.IngressClassName] = nil
 			}
 		}
@@ -134,7 +141,7 @@ func serviceEventHandler(c client.Client) handler.EventHandler {
 		classes := map[string]any{}
 		for i := range ingresses.Items {
 			ingress := &ingresses.Items[i]
-			if ingress.Spec.IngressClassName != nil && *ingress.Spec.IngressClassName == "" {
+			if ingress.Spec.IngressClassName != nil && *ingress.Spec.IngressClassName != "" {
 				classes[*ingress.Spec.IngressClassName] = nil
 			}
 		}
@@ -166,7 +173,7 @@ func nodeEventHandler(c client.Client) handler.EventHandler {
 				continue
 			}
 			requestList = append(requestList, ctrl.Request{
-				NamespacedName: client.ObjectKeyFromObject(new(ingressClassList.Items[i])),
+				NamespacedName: client.ObjectKeyFromObject(&ingressClassList.Items[i]),
 			})
 		}
 		return requestList

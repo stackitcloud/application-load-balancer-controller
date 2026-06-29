@@ -148,8 +148,11 @@ func (r *IngressClassReconciler) getServicesForIngresses(ctx context.Context, in
 	for i := range ingresses {
 		ingress := ingresses[i]
 		for ruleIndex, rule := range ingress.Spec.Rules {
+			if rule.HTTP == nil {
+				continue
+			}
 			for pathIndex, path := range rule.HTTP.Paths {
-				if path.Backend.Service.Name == "" {
+				if path.Backend.Service == nil || path.Backend.Service.Name == "" {
 					continue
 				}
 				service := corev1.Service{}
@@ -329,8 +332,6 @@ func targetPoolsChanged(current, desired []albsdk.TargetPool) bool {
 func optionsChanged(current, desired *albsdk.LoadBalancerOptions) bool {
 	a := ptr.Deref(ptr.Deref(current, albsdk.LoadBalancerOptions{}).AccessControl, albsdk.LoadbalancerOptionAccessControl{})
 	b := ptr.Deref(ptr.Deref(desired, albsdk.LoadBalancerOptions{}).AccessControl, albsdk.LoadbalancerOptionAccessControl{})
-	if a.AllowedSourceRanges == nil || b.AllowedSourceRanges == nil {
-		return a.AllowedSourceRanges != nil || b.AllowedSourceRanges != nil
-	}
+	// The SDK considers nil and empty slices equal. slices.Equal does the same.
 	return !slices.Equal(a.AllowedSourceRanges, b.AllowedSourceRanges)
 }
