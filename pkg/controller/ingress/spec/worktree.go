@@ -413,6 +413,9 @@ func getTargetsOfNodes(nodes []corev1.Node) []albsdk.Target {
 	targets := []albsdk.Target{}
 	for i := range nodes {
 		node := &nodes[i]
+		if isNodeTerminating(node) {
+			continue
+		}
 		for j := range node.Status.Addresses {
 			address := node.Status.Addresses[j]
 			if address.Type == corev1.NodeInternalIP {
@@ -631,4 +634,26 @@ func (t *WorkTreeALB) ToUpdatePayload(
 	}
 	update.Version = t.existingALB.Version
 	return update
+}
+
+const (
+	// From https://github.com/kubernetes/cloud-provider/blob/81e4f58b4d1badd71d633d356faaaf69d971d874/controllers/service/controller.go#L64C2-L64C53
+	TaintToBeDeleted = "ToBeDeletedByClusterAutoscaler"
+	// From https://github.com/gardener/machine-controller-manager/blob/fc341881a5e71d7c5f240ca73415f967084aa85b/pkg/util/provider/machineutils/utils.go#L61
+	ConditionNodeTermination corev1.NodeConditionType = "Terminating"
+)
+
+func isNodeTerminating(node *corev1.Node) bool {
+	for _, taint := range node.Spec.Taints {
+		if taint.Key == TaintToBeDeleted {
+			return true
+		}
+	}
+
+	for _, condition := range node.Status.Conditions {
+		if condition.Type == ConditionNodeTermination && condition.Status == corev1.ConditionTrue {
+			return true
+		}
+	}
+	return false
 }

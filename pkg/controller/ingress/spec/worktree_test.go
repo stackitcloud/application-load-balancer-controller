@@ -573,4 +573,82 @@ var _ = Describe("WorkTreeALB", func() {
 			}),
 		))
 	})
+
+	It("should filter out nodes that don't meet the criteria to serve traffic", func() {
+		tree, errs := BuildTree(
+			&networkingv1.IngressClass{},
+			[]networkingv1.Ingress{
+				Ingress(corev1.NamespaceDefault, "ingress-1", WithRule("my-host.local",
+					WithPath("/", new(networkingv1.PathTypePrefix), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
+				)),
+			},
+			nil,
+			[]corev1.Service{
+				Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 80, 30000, corev1.ProtocolTCP)),
+			}, []corev1.Node{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "node-that-meets-all-criteria",
+					},
+					Status: corev1.NodeStatus{
+						Addresses: []corev1.NodeAddress{
+							{
+								Type:    corev1.NodeInternalIP,
+								Address: "10.0.0.1",
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "node-with-termination-condition",
+					},
+					Status: corev1.NodeStatus{
+						Conditions: []corev1.NodeCondition{
+							{
+								Type:   ConditionNodeTermination,
+								Status: corev1.ConditionTrue,
+							},
+						},
+						Addresses: []corev1.NodeAddress{
+							{
+								Type:    corev1.NodeInternalIP,
+								Address: "10.0.0.2",
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "node-with-tobedeleted-taint",
+					},
+					Spec: corev1.NodeSpec{
+						Taints: []corev1.Taint{
+							{
+								Key: TaintToBeDeleted,
+							},
+						},
+					},
+					Status: corev1.NodeStatus{
+						Addresses: []corev1.NodeAddress{
+							{
+								Type:    corev1.NodeInternalIP,
+								Address: "10.0.0.3",
+							},
+						},
+					},
+				},
+			}, nil,
+		)
+
+		Expect(errs).To(BeEmpty())
+		create := tree.ToCreatePayload(nil, "network-id", "region")
+		Expect(create.TargetPools).To(HaveLen(1))
+		Expect(create.TargetPools[0].Targets).To(ConsistOf(
+			v2api.Target{
+				DisplayName: new("node-that-meets-all-criteria"),
+				Ip:          new("10.0.0.1"),
+			},
+		))
+	})
 })
