@@ -11,9 +11,6 @@ import (
 	albsdk "github.com/stackitcloud/stackit-sdk-go/services/alb/v2api"
 	certsdk "github.com/stackitcloud/stackit-sdk-go/services/certificates/v2api"
 
-	"k8s.io/apimachinery/pkg/runtime"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -22,13 +19,8 @@ import (
 )
 
 var (
-	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
 )
-
-func init() {
-	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-}
 
 // options holds the command-line options used to initialize the controller manager.
 type options struct {
@@ -68,7 +60,6 @@ func main() {
 	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme: scheme,
 		Metrics: metricsserver.Options{
 			BindAddress: opts.metricsAddr,
 		},
@@ -123,7 +114,6 @@ func main() {
 		Recorder:          mgr.GetEventRecorderFor("ingressclass-controller"),
 		ALBClient:         albClient,
 		CertificateClient: certificateClient,
-		Scheme:            mgr.GetScheme(),
 		ALBConfig:         config,
 	}).SetupWithManager(ctx, mgr, ""); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "IngressClass")
