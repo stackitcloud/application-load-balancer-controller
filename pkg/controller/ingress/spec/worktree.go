@@ -369,8 +369,9 @@ func buildTargetPool(
 	}
 	nodePort := int32(0)
 	for _, port := range service.Spec.Ports {
+		// We must not match an empty port name against an empty port name.
 		if port.Port == path.Backend.Service.Port.Number ||
-			port.Name == path.Backend.Service.Port.Name {
+			(port.Name != "" && port.Name == path.Backend.Service.Port.Name) {
 			if port.NodePort == 0 {
 				errors = append(errors, ErrorEvent{
 					Ingress:     ingress,
@@ -386,7 +387,7 @@ func buildTargetPool(
 		errors = append(errors, ErrorEvent{
 			Ingress:     ingress,
 			FieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("paths").Index(pathIndex).Child("backend", "service"),
-			Description: "Port not found in service",
+			Description: "Port not found in service.",
 		})
 		return nil, errors
 	}
