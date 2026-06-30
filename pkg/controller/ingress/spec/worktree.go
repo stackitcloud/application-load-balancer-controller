@@ -405,6 +405,14 @@ func buildTargetPool(
 	}
 	// If externalTrafficPolicy=Cluster we use the default TCP health check on the node port itself.
 	if service.Spec.ExternalTrafficPolicy == corev1.ServiceExternalTrafficPolicyLocal {
+		if service.Spec.HealthCheckNodePort == 0 {
+			errors = append(errors, ErrorEvent{
+				Ingress:     ingress,
+				FieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("paths").Index(pathIndex).Child("backend", "service"),
+				Description: "Service has externalTrafficPolicy=Local but doesn't have a health check node port. The service must be of type LoadBalancer.",
+			})
+			return nil, errors
+		}
 		targetPool.ActiveHealthCheck = &albsdk.ActiveHealthCheck{
 			AltPort: &service.Spec.HealthCheckNodePort,
 			HttpHealthChecks: &albsdk.HttpHealthChecks{
