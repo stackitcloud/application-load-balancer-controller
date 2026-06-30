@@ -411,6 +411,8 @@ func buildTargetPool(
 				Path:       new("/healthz"),
 				OkStatuses: []string{"200"},
 			},
+			// If ActiveHealthCheck is set then all fields in it have to be set.
+			// The fields below are not strictly needed for externalTrafficPolicy=Local.
 			HealthyThreshold:   new(int32(1)),
 			Interval:           new("5s"),
 			IntervalJitter:     new("1s"),
