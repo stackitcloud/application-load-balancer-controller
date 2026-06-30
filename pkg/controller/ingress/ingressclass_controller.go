@@ -10,7 +10,7 @@ import (
 	stackitconfig "github.com/stackitcloud/application-load-balancer-controller/pkg/stackit/config"
 	networkingv1 "k8s.io/api/networking/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -26,7 +26,7 @@ const (
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;watch
-// +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingressclasses,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses/status,verbs=get;update;patch
@@ -34,7 +34,7 @@ const (
 // IngressClassReconciler reconciles a IngressClass object
 type IngressClassReconciler struct { //nolint:revive // Naming this ClassReconciler would be confusing.
 	Client            client.Client
-	Recorder          record.EventRecorder
+	Recorder          events.EventRecorder
 	ALBClient         stackit.ApplicationLoadBalancerClient
 	CertificateClient stackit.CertificatesClient
 	ALBConfig         stackitconfig.ALBConfig

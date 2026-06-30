@@ -24,7 +24,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -40,7 +40,7 @@ const (
 
 var _ = Describe("IngressClassController", func() {
 	var (
-		recorder *record.FakeRecorder
+		recorder *events.FakeRecorder
 
 		// namespace is the namespace in which all namespaced resources of the test case should go.
 		// It is cleaned up automatically when the test ends and all resource deletions will be finalized before the test case completes.
@@ -60,7 +60,7 @@ var _ = Describe("IngressClassController", func() {
 	BeforeEach(func(ctx context.Context) {
 
 		mockCtrl = gomock.NewController(GinkgoT())
-		recorder = record.NewFakeRecorder(10)
+		recorder = events.NewFakeRecorder(10)
 
 		albClient = stackit.NewMockApplicationLoadBalancerClient(mockCtrl)
 		certClient = stackit.NewMockCertificatesClient(mockCtrl)

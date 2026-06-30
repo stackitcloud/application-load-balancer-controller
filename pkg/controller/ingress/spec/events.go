@@ -6,7 +6,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -23,7 +23,8 @@ func (e *ErrorEvent) Error() string {
 	return e.Description
 }
 
-func (e *ErrorEvent) RecordEvent(class *networkingv1.IngressClass, recorder record.EventRecorder) {
-	recorder.Eventf(class, corev1.EventTypeWarning, "IngressWarning", "Error in %s in Namespace %s: %s", e.Ingress.GetName(), e.Ingress.GetNamespace(), e.Error())
-	recorder.Event(e.Ingress, corev1.EventTypeWarning, "IngressWarning", e.Error())
+func (e *ErrorEvent) RecordEvent(class *networkingv1.IngressClass, recorder events.EventRecorder) {
+	recorder.Eventf(class, e.Ingress, corev1.EventTypeWarning, "IngressWarning", "ReconcilingALB",
+		"Error in %s in Namespace %s: %s", e.Ingress.GetName(), e.Ingress.GetNamespace(), e.Error())
+	recorder.Eventf(e.Ingress, class, corev1.EventTypeWarning, "IngressWarning", "ReconcilingALB", e.Error())
 }

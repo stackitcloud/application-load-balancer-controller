@@ -56,7 +56,7 @@ rules:
       - watch
   # Emit events for ingress/ingressclass reconciliations.
   - apiGroups:
-      - ""
+      - "events.k8s.io"
     resources:
       - events
     verbs:
