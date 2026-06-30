@@ -71,7 +71,6 @@ func (r *IngressClassReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			return ctrl.Result{}, fmt.Errorf("failed to add finalizer to IngressClass: %w", err)
 		}
 		ctrl.LoggerFrom(ctx).Info("Added finalizer")
-		return ctrl.Result{}, nil
 	}
 
 	if err := r.reconcileALBResources(ctx, ingressClass); err != nil {
