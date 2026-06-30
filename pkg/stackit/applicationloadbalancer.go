@@ -2,6 +2,7 @@ package stackit
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/uuid"
 
@@ -45,7 +46,7 @@ func NewApplicationLoadBalancerClient(cl *albsdk.APIClient) (ApplicationLoadBala
 func (cl applicationLoadBalancerClient) GetLoadBalancer(ctx context.Context, projectID, region, name string) (*albsdk.LoadBalancer, error) {
 	lb, err := cl.client.DefaultAPI.GetLoadBalancer(ctx, projectID, region, name).Execute()
 	if isOpenAPINotFound(err) {
-		return lb, ErrorNotFound
+		return lb, fmt.Errorf("%w: %w", ErrorNotFound, err)
 	}
 	return lb, err
 }
@@ -62,7 +63,7 @@ func (cl applicationLoadBalancerClient) CreateLoadBalancer(
 ) (*albsdk.LoadBalancer, error) {
 	lb, err := cl.client.DefaultAPI.CreateLoadBalancer(ctx, projectID, region).CreateLoadBalancerPayload(*create).XRequestID(uuid.NewString()).Execute()
 	if isOpenAPINotFound(err) {
-		return lb, ErrorNotFound
+		return lb, fmt.Errorf("%w: %w", ErrorNotFound, err)
 	}
 	return lb, err
 }
