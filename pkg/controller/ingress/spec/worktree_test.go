@@ -2,6 +2,7 @@ package spec
 
 import (
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -114,6 +115,33 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(createPayload.TargetPools[3].TargetPort).To(HaveValue(Equal(int32(5003))))
 	})
 
+	It("should not expose ingress on HTTP if configured HTTPS-only", func() {
+		tree, errs := BuildTree(
+			&networkingv1.IngressClass{},
+			[]networkingv1.Ingress{
+				Ingress(corev1.NamespaceDefault, "ingress",
+					WithAnnotation(AnnotationHTTPSOnly, "true"), WithTLSSecret("my-cert"),
+					WithRule("my-host.local", WithPath("/", new(networkingv1.PathTypePrefix), "my-service", networkingv1.ServiceBackendPort{Number: 80})),
+				),
+			},
+			[]corev1.Secret{
+				{
+					ObjectMeta: metav1.ObjectMeta{Namespace: corev1.NamespaceDefault, Name: "my-cert"},
+					Type:       corev1.SecretTypeTLS,
+					Data: map[string][]byte{
+						corev1.TLSCertKey:       []byte(testdata.FixtureTLS1PublicKey),
+						corev1.TLSPrivateKeyKey: []byte(testdata.FixtureTLS1PrivateKey),
+					},
+				},
+			}, []corev1.Service{
+				Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 80, 30000, corev1.ProtocolTCP)),
+			}, nil, nil,
+		)
+
+		Expect(errs).To(BeEmpty())
+		Expect(tree.listeners).To(And(HaveLen(1), HaveKey(BeEquivalentTo(443))))
+	})
+
 	It("should return an error when the TLS secret doesn't exist", func() {
 		_, errs := BuildTree(
 			&networkingv1.IngressClass{},
@@ -211,6 +239,31 @@ var _ = Describe("WorkTreeALB", func() {
 				Ports:      map[uint16]any{443: nil},
 			},
 		))
+	})
+
+	It("should return unused certificates that are no longer used by the ALB", func() {
+		tree, err := BuildTree(&networkingv1.IngressClass{}, []networkingv1.Ingress{
+			Ingress(corev1.NamespaceDefault, "ingress-with-tls-secret-reference", WithTLSSecret("my-tls")),
+		}, []corev1.Secret{
+			{
+				ObjectMeta: metav1.ObjectMeta{Namespace: corev1.NamespaceDefault, Name: "my-tls"},
+				Type:       corev1.SecretTypeTLS,
+				Data: map[string][]byte{
+					corev1.TLSCertKey:       []byte(testdata.FixtureTLS1PublicKey),
+					corev1.TLSPrivateKeyKey: []byte(testdata.FixtureTLS1PrivateKey),
+				},
+			},
+		}, []corev1.Service{}, nil, nil)
+
+		Expect(err).To(BeEmpty())
+		Expect(tree.GetUnusedCertificates(map[CertificateFingerprint]string{
+			testdata.FixtureTLS1FingerprintSHA256: "id-1",
+			testdata.FixtureTLS2FingerprintSHA256: "id-2",
+			testdata.FixtureTLS3FingerprintSHA256: "id-3",
+		})).To(Equal(map[CertificateFingerprint]string{
+			testdata.FixtureTLS2FingerprintSHA256: "id-2",
+			testdata.FixtureTLS3FingerprintSHA256: "id-3",
+		}))
 	})
 
 	It("should use TLS certificates only on ports that reference it", func() {
@@ -417,15 +470,25 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(create.Options.EphemeralAddress).To(HaveValue(BeFalse()))
 	})
 
-	It("should return errors for paths that exceed the target pool limit", func() {
+	It("should return errors for paths that exceed the target pool limit ", func() {
 		ingresses := []networkingv1.Ingress{}
-		for i := range 8 { // 8 * 3 paths = 24
-			ingresses = append(ingresses, Ingress(corev1.NamespaceDefault, fmt.Sprintf("ingress-%d", i), WithAnnotation(AnnotationPriority, fmt.Sprintf("%d", i)),
-				WithRule("my-host.local",
-					WithPath(fmt.Sprintf("/%d", i*3), new(networkingv1.PathTypeExact), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
-					WithPath(fmt.Sprintf("/%d", i*3+1), new(networkingv1.PathTypeExact), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
-					WithPath(fmt.Sprintf("/%d", i*3+2), new(networkingv1.PathTypeExact), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
-				)))
+		// We create a matrix of resources based on all sorting criteria.
+		for prio := range 2 { // 2 * 2 * 2 * 3 paths = 24
+			for age := range 2 { // Higher age means older
+				for alphabet := range 2 {
+					ingresses = append(ingresses, Ingress(corev1.NamespaceDefault,
+						fmt.Sprintf("ingress-prio-%d-age-%d-%s", prio, age, string(rune('a'+alphabet))),
+						func(ingress *networkingv1.Ingress) {
+							ingress.CreationTimestamp = metav1.NewTime(time.Unix(100000, 0).Add(-time.Duration(age) * time.Hour))
+						},
+						WithAnnotation(AnnotationPriority, fmt.Sprintf("%d", prio)),
+						WithRule("my-host.local",
+							WithPath(fmt.Sprintf("/prio-%d-age-%d-%d-0", prio, age, alphabet), new(networkingv1.PathTypeExact), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
+							WithPath(fmt.Sprintf("/prio-%d-age-%d-%d-1", prio, age, alphabet), new(networkingv1.PathTypeExact), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
+							WithPath(fmt.Sprintf("/prio-%d-age-%d-%d-2", prio, age, alphabet), new(networkingv1.PathTypeExact), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
+						)))
+				}
+			}
 		}
 		_, errs := BuildTree(
 			&networkingv1.IngressClass{}, ingresses, nil, []corev1.Service{
@@ -435,22 +498,22 @@ var _ = Describe("WorkTreeALB", func() {
 
 		Expect(errs).To(ConsistOf(
 			MatchAllFields(Fields{
-				"Ingress":     testutil.HaveName("ingress-0"),
+				"Ingress":     testutil.HaveName("ingress-prio-0-age-0-b"),
 				"Description": Equal("Target pool limit reached. Path will be ignored."),
 				"FieldPath":   Equal(field.NewPath("spec", "rules").Index(0).Child("paths").Index(0)),
 			}),
 			MatchAllFields(Fields{
-				"Ingress":     testutil.HaveName("ingress-0"),
+				"Ingress":     testutil.HaveName("ingress-prio-0-age-0-b"),
 				"Description": Equal("Target pool limit reached. Path will be ignored."),
 				"FieldPath":   Equal(field.NewPath("spec", "rules").Index(0).Child("paths").Index(1)),
 			}),
 			MatchAllFields(Fields{
-				"Ingress":     testutil.HaveName("ingress-0"),
+				"Ingress":     testutil.HaveName("ingress-prio-0-age-0-b"),
 				"Description": Equal("Target pool limit reached. Path will be ignored."),
 				"FieldPath":   Equal(field.NewPath("spec", "rules").Index(0).Child("paths").Index(2)),
 			}),
 			MatchAllFields(Fields{
-				"Ingress":     testutil.HaveName("ingress-1"),
+				"Ingress":     testutil.HaveName("ingress-prio-0-age-0-a"),
 				"Description": Equal("Target pool limit reached. Path will be ignored."),
 				"FieldPath":   Equal(field.NewPath("spec", "rules").Index(0).Child("paths").Index(2)),
 			}),
