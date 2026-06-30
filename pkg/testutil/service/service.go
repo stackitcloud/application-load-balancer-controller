@@ -37,9 +37,9 @@ func WithPort(name string, port, nodePort int32, protocol corev1.Protocol) Servi
 	}
 }
 
-func WithServiceType(_type corev1.ServiceType) ServiceOption {
+func WithServiceType(t corev1.ServiceType) ServiceOption {
 	return func(service *corev1.Service) {
-		service.Spec.Type = _type
+		service.Spec.Type = t
 	}
 }
 
