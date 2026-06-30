@@ -19,7 +19,7 @@ var _ = Describe("SanitizeLabelValue", func() {
 	It("should truncate labels longer than 63 characters", func() {
 		longLabel := "this-is-a-very-long-label-that-should-be-truncated-to-63-characters-1234567890"
 		result := SanitizeLabelValue(longLabel)
-		Expect(len(result)).To(BeNumerically("<=", 63))
+		Expect(result).To(HaveLen(63))
 		Expect(result).To(Equal("this-is-a-very-long-label-that-should-be-truncated-to-63-charac"))
 	})
 
