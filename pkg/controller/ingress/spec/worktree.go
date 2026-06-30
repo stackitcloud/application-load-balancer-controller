@@ -340,7 +340,6 @@ func buildTargetPool(
 		})
 		return nil, errors
 	}
-	targetPool := &albsdk.TargetPool{}
 
 	// TODO: Support other backends than services.
 	if path.Backend.Service == nil {
@@ -392,9 +391,11 @@ func buildTargetPool(
 		return nil, errors
 	}
 
-	targetPool.Name = new(ingressPathReference.toTargetPoolName())
-	targetPool.TargetPort = new(nodePort)
-	targetPool.Targets = targets
+	targetPool := &albsdk.TargetPool{
+		Name:       new(ingressPathReference.toTargetPoolName()),
+		TargetPort: new(nodePort),
+		Targets:    targets,
+	}
 	targetPool.TlsConfig = &albsdk.TlsConfig{
 		Enabled:                   new(GetAnnotation(AnnotationTargetPoolTLSEnabled, false, &service, ingress, ingressClass)),
 		SkipCertificateValidation: new(GetAnnotation(AnnotationTargetPoolTLSSkipCertificateValidation, false, &service, ingress, ingressClass)),
