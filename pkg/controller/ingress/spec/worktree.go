@@ -231,11 +231,11 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 
 				var httpAdded, httpsAdded bool
 				if !httpsOnly {
-					httpAdded, e = addPathToTree(tree, ingressClass, ingress, rule, ruleIndex, path, pathIndex, uint16(httpPort), protocolHTTP)
+					httpAdded, e = tree.addPath(ingressClass, ingress, rule, ruleIndex, path, pathIndex, uint16(httpPort), protocolHTTP)
 					errors = append(errors, e...)
 				}
 				if len(ingress.Spec.TLS) > 0 {
-					httpsAdded, e = addPathToTree(tree, ingressClass, ingress, rule, ruleIndex, path, pathIndex, uint16(httpsPort), protocolHTTPS)
+					httpsAdded, e = tree.addPath(ingressClass, ingress, rule, ruleIndex, path, pathIndex, uint16(httpsPort), protocolHTTPS)
 					errors = append(errors, e...)
 				}
 
@@ -261,17 +261,17 @@ func addAccessControlToTree(tree *WorkTreeALB, ingressClass *networkingv1.Ingres
 	}
 }
 
-// addPathToTree adds the given path to tree under the given port and protocol.
+// addPath adds the given path to tree under the given port and protocol.
 // It implicitly creates listeners and hosts that don't exist yet in tree.
-func addPathToTree(
-	tree *WorkTreeALB, ingressClass *networkingv1.IngressClass, ingress *networkingv1.Ingress,
+func (t *WorkTreeALB) addPath(
+	ingressClass *networkingv1.IngressClass, ingress *networkingv1.Ingress,
 	rule networkingv1.IngressRule, ruleIndex int, path networkingv1.HTTPIngressPath, pathIndex int,
 	port uint16, protocol protocol,
 ) (added bool, errors []ErrorEvent) {
 	_pathWithType := pathWithType{pathType: ptr.Deref(path.PathType, networkingv1.PathTypeExact), path: path.Path}
 	ingressPathReference := ingressPathReference{namespace: ingress.Namespace, name: ingress.Name, uid: string(ingress.UID), ruleIndex: ruleIndex, pathIndex: pathIndex}
 
-	listener, exists := tree.listeners[port]
+	listener, exists := t.listeners[port]
 	if !exists {
 		listener = &workTreeListener{
 			hosts:    map[string]*workTreeHost{},
@@ -311,7 +311,7 @@ func addPathToTree(
 	}
 
 	// We assign listener and host whether they exist or not. If they already exist we assign them to the same pointer.
-	tree.listeners[port] = listener
+	t.listeners[port] = listener
 	listener.hosts[rule.Host] = host
 
 	host.paths[_pathWithType] = albPath
