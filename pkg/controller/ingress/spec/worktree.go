@@ -218,7 +218,7 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 				continue
 			}
 			for pathIndex, path := range rule.HTTP.Paths {
-				ingressPathReference := ingressPathReference{
+				ingressPathRef := ingressPathReference{
 					namespace: ingress.Namespace, name: ingress.Name, uid: string(ingress.UID),
 					ruleIndex: ruleIndex, pathIndex: pathIndex,
 				}
@@ -241,7 +241,7 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 
 				// We only add the target pool if at least one rule was added that references the target pool.
 				if httpAdded || httpsAdded {
-					tree.targetPools[ingressPathReference] = targetPool
+					tree.targetPools[ingressPathRef] = targetPool
 				}
 			}
 		}
@@ -268,8 +268,8 @@ func (t *WorkTreeALB) addPath(
 	rule networkingv1.IngressRule, ruleIndex int, path networkingv1.HTTPIngressPath, pathIndex int,
 	port uint16, protocol protocol,
 ) (added bool, errors []ErrorEvent) {
-	_pathWithType := pathWithType{pathType: ptr.Deref(path.PathType, networkingv1.PathTypeExact), path: path.Path}
-	ingressPathReference := ingressPathReference{namespace: ingress.Namespace, name: ingress.Name, uid: string(ingress.UID), ruleIndex: ruleIndex, pathIndex: pathIndex}
+	pathAndType := pathWithType{pathType: ptr.Deref(path.PathType, networkingv1.PathTypeExact), path: path.Path}
+	ingressPathRef := ingressPathReference{namespace: ingress.Namespace, name: ingress.Name, uid: string(ingress.UID), ruleIndex: ruleIndex, pathIndex: pathIndex}
 
 	listener, exists := t.listeners[port]
 	if !exists {
@@ -295,7 +295,7 @@ func (t *WorkTreeALB) addPath(
 		}
 	}
 
-	_, exists = host.paths[_pathWithType]
+	_, exists = host.paths[pathAndType]
 	if exists {
 		errors = append(errors, ErrorEvent{
 			Ingress:     ingress,
@@ -305,8 +305,8 @@ func (t *WorkTreeALB) addPath(
 		return false, errors
 	}
 	albPath := &workTreePath{
-		path:                 _pathWithType,
-		ingressPathReference: ingressPathReference,
+		path:                 pathAndType,
+		ingressPathReference: ingressPathRef,
 		websocket:            GetAnnotation(AnnotationWebSocket, false, ingress, ingressClass),
 	}
 
@@ -314,7 +314,7 @@ func (t *WorkTreeALB) addPath(
 	t.listeners[port] = listener
 	listener.hosts[rule.Host] = host
 
-	host.paths[_pathWithType] = albPath
+	host.paths[pathAndType] = albPath
 	return true, errors
 }
 
@@ -329,9 +329,9 @@ func buildTargetPool(
 ) (*albsdk.TargetPool, []ErrorEvent) {
 	errors := []ErrorEvent{}
 
-	ingressPathReference := ingressPathReference{namespace: ingress.Namespace, name: ingress.Name, uid: string(ingress.UID), ruleIndex: ruleIndex, pathIndex: pathIndex}
+	ingressPathRef := ingressPathReference{namespace: ingress.Namespace, name: ingress.Name, uid: string(ingress.UID), ruleIndex: ruleIndex, pathIndex: pathIndex}
 
-	_, exists := tree.targetPools[ingressPathReference]
+	_, exists := tree.targetPools[ingressPathRef]
 	if !exists && len(tree.targetPools) >= LimitTargetPools {
 		errors = append(errors, ErrorEvent{
 			Ingress:     ingress,
@@ -392,7 +392,7 @@ func buildTargetPool(
 	}
 
 	targetPool := &albsdk.TargetPool{
-		Name:       new(ingressPathReference.toTargetPoolName()),
+		Name:       new(ingressPathRef.toTargetPoolName()),
 		TargetPort: new(nodePort),
 		Targets:    targets,
 	}
@@ -444,7 +444,6 @@ func ValidateTLSCertAndFingerprint(publicKey, privateKey []byte) (string, error)
 }
 
 func getTargetsOfNodes(nodes []corev1.Node) []albsdk.Target {
-	// TODO: remove nodes that are in deletion
 	targets := []albsdk.Target{}
 	for i := range nodes {
 		node := &nodes[i]
