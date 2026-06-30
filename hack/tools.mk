@@ -9,7 +9,7 @@ GOIMPORTS_REVISER_VERSION ?= v3.12.6
 # renovate: datasource=github-releases depName=golangci/golangci-lint
 GOLANGCI_LINT_VERSION ?= v2.12.2
 # renovate: datasource=github-releases depName=ko-build/ko
-KO_VERSION ?= v0.18.1
+KO_VERSION ?= v0.19.1
 
 
 # Tool targets should declare go.mod as a prerequisite, if the tool's version is managed via go modules. This causes
