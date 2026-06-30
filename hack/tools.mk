@@ -10,7 +10,8 @@ GOIMPORTS_REVISER_VERSION ?= v3.12.6
 GOLANGCI_LINT_VERSION ?= v2.12.2
 # renovate: datasource=github-releases depName=ko-build/ko
 KO_VERSION ?= v0.18.1
-ENVTEST_VERSION ?= v0.0.0-20260317052337-b8d2b5b862fa
+# use controller-runtime version from go.mod
+ENVTEST_VERSION ?= $(shell go list -m -f "{{ .Version }}" sigs.k8s.io/controller-runtime)
 
 
 # Tool targets should declare go.mod as a prerequisite, if the tool's version is managed via go modules. This causes
