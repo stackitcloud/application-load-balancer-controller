@@ -68,13 +68,13 @@ func WithRule(host string, opts ...RuleOptions) IngressOption {
 
 type RuleOptions func(rule *networkingv1.IngressRule)
 
-func WithPath(path string, _type *networkingv1.PathType, serviceName string, serviceBackendPort networkingv1.ServiceBackendPort) RuleOptions {
+func WithPath(path string, pathType *networkingv1.PathType, serviceName string, serviceBackendPort networkingv1.ServiceBackendPort) RuleOptions {
 	return func(rule *networkingv1.IngressRule) {
 		if rule.HTTP.Paths == nil {
 			rule.HTTP.Paths = []networkingv1.HTTPIngressPath{}
 		}
 		rule.HTTP.Paths = append(rule.HTTP.Paths, networkingv1.HTTPIngressPath{
-			PathType: _type,
+			PathType: pathType,
 			Path:     path,
 			Backend: networkingv1.IngressBackend{
 				Service: &networkingv1.IngressServiceBackend{
