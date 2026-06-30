@@ -2,6 +2,7 @@ package stackit
 
 import (
 	"context"
+	"fmt"
 
 	certsdk "github.com/stackitcloud/stackit-sdk-go/services/certificates/v2api"
 )
@@ -27,7 +28,7 @@ func NewCertClient(cl *certsdk.APIClient) (CertificatesClient, error) {
 func (cl certClient) GetCertificate(ctx context.Context, projectID, region, name string) (*certsdk.GetCertificateResponse, error) {
 	cert, err := cl.client.DefaultAPI.GetCertificate(ctx, projectID, region, name).Execute()
 	if isOpenAPINotFound(err) {
-		return cert, ErrorNotFound
+		return cert, fmt.Errorf("%w: %w", ErrorNotFound, err)
 	}
 	return cert, err
 }
@@ -42,7 +43,7 @@ func (cl certClient) CreateCertificate(
 ) (*certsdk.GetCertificateResponse, error) {
 	cert, err := cl.client.DefaultAPI.CreateCertificate(ctx, projectID, region).CreateCertificatePayload(*certificate).Execute()
 	if isOpenAPINotFound(err) {
-		return cert, ErrorNotFound
+		return cert, fmt.Errorf("%w: %w", ErrorNotFound, err)
 	}
 	return cert, err
 }
