@@ -23,14 +23,6 @@ const (
 	controllerName = "stackit.cloud/alb-ingress"
 )
 
-// +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch
-// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch
-// +kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;watch
-// +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
-// +kubebuilder:rbac:groups=networking.k8s.io,resources=ingressclasses,verbs=get;list;watch;update;patch
-// +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch
-// +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses/status,verbs=get;update;patch
-
 // IngressClassReconciler reconciles a IngressClass object
 type IngressClassReconciler struct { //nolint:revive // Naming this ClassReconciler would be confusing.
 	Client            client.Client
