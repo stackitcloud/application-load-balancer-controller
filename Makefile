@@ -48,11 +48,11 @@ modules: ## Runs go mod to ensure modules are up to date.
 	go mod tidy
 
 .PHONY: test
-test: ## Run tests.
+test: $(ENVTEST) ## Run tests.
 	./hack/test.sh ./cmd/... ./pkg/...
 
 .PHONY: test-cover
-test-cover: ## Run tests with coverage.
+test-cover: $(ENVTEST) ## Run tests with coverage.
 	go test -coverprofile cover.out ./...
 	go tool cover -html cover.out -o cover.html
 

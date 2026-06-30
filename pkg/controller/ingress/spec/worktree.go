@@ -323,7 +323,7 @@ func (t *WorkTreeALB) addPath(
 //
 // This function doesn't mutate tree or any other arguments.
 // If the target pool is not valid nil is returned together with a list of errors.
-func buildTargetPool(
+func buildTargetPool( //nolint:gocyclo,funlen // TODO: Make function easier?!
 	tree *WorkTreeALB, ingressClass *networkingv1.IngressClass, targets []albsdk.Target, ingress *networkingv1.Ingress,
 	ruleIndex int, path networkingv1.HTTPIngressPath, pathIndex int, servicesMap map[types.NamespacedName]corev1.Service,
 ) (*albsdk.TargetPool, []ErrorEvent) {

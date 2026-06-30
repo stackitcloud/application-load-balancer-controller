@@ -208,6 +208,7 @@ var _ = Describe("WorkTreeALB", func() {
 			WorkTreeCertificate{
 				PublicKey:  testdata.FixtureTLS1PublicKey,
 				PrivateKey: testdata.FixtureTLS1PrivateKey,
+				Ports:      map[uint16]any{443: nil},
 			},
 		))
 	})
@@ -604,7 +605,7 @@ var _ = Describe("WorkTreeALB", func() {
 				"FieldPath":   Equal(field.NewPath("spec", "rules").Index(0).Child("paths").Index(0).Child("backend", "service")),
 			}),
 		))
-		Expect(tree.targetPools).To(HaveLen(0))
+		Expect(tree.targetPools).To(BeEmpty())
 	})
 
 	It("should filter out nodes that don't meet the criteria to serve traffic", func() {
