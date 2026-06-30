@@ -7,8 +7,14 @@ export REPO                 := ghcr.io/stackitcloud
 VERSION 					?= $(shell git describe --dirty --tags --match='v*' 2>/dev/null || git rev-parse --short HEAD)
 export TAG                  := $(VERSION)
 IS_DEV                      ?= true
+
 ifeq ($(IS_DEV),true)
-REPO_POSTFIX                := dev
+REPO_POSTFIX                := -dev
+# Get current branch and replace invalid characters with hyphens for valid docker tagging
+BRANCH_NAME                 := $(shell git rev-parse --abbrev-ref HEAD | sed 's/[^a-zA-Z0-9_.-]/-/g')
+KO_TAGS                     := $(TAG),$(BRANCH_NAME)
+else
+KO_TAGS                     := $(TAG),latest
 endif
 
 .PHONY: all
@@ -22,9 +28,9 @@ export PUSH ?= false
 
 .PHONY: images
 images: $(KO)
-	KO_DOCKER_REPO=$(REPO)/$(NAME)-$(REPO_POSTFIX) $(KO) build --push=$(PUSH) \
+	KO_DOCKER_REPO=$(REPO)/$(NAME)$(REPO_POSTFIX) $(KO) build --push=$(PUSH) \
 		--image-label org.opencontainers.image.source="https://github.com/stackitcloud/application-load-balancer-controller" \
-		--sbom none -t $(TAG) --bare \
+		--sbom none -t $(KO_TAGS) --bare \
 		--platform linux/amd64,linux/arm64 \
 		./cmd/$(NAME)
 
