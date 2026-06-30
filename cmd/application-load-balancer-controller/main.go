@@ -73,12 +73,16 @@ func main() {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
-	albOpts := []sdkconfig.ConfigurationOption{}
+	albOpts := []sdkconfig.ConfigurationOption{
+		sdkconfig.WithUserAgent("application-load-balancer-controller"),
+	}
 	if config.Global.APIEndpoints.ApplicationLoadBalancerAPI != "" {
 		albOpts = append(albOpts, sdkconfig.WithEndpoint(config.Global.APIEndpoints.ApplicationLoadBalancerAPI))
 	}
 
-	certOpts := []sdkconfig.ConfigurationOption{}
+	certOpts := []sdkconfig.ConfigurationOption{
+		sdkconfig.WithUserAgent("application-load-balancer-controller"),
+	}
 	if config.Global.APIEndpoints.ApplicationLoadBalancerCertificateAPI != "" {
 		certOpts = append(certOpts, sdkconfig.WithEndpoint(config.Global.APIEndpoints.ApplicationLoadBalancerCertificateAPI))
 	}
