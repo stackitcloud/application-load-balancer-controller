@@ -143,16 +143,36 @@ var _ = Describe("WorkTreeALB", func() {
 	})
 
 	It("should return an error when the TLS secret doesn't exist", func() {
-		_, errs := BuildTree(
+		tree, errs := BuildTree(
 			&networkingv1.IngressClass{},
 			[]networkingv1.Ingress{
-				Ingress(corev1.NamespaceDefault, "ingress-with-tls-secret-reference", WithTLSSecret("doesnt-exist")),
+				Ingress(corev1.NamespaceDefault, "ingress-with-tls-secret-reference", WithAnnotation(AnnotationHTTPSOnly, "true"), WithTLSSecret("doesnt-exist"), WithRule("my-host.local", WithPath(
+					"/", new(networkingv1.PathTypePrefix), "my-service", networkingv1.ServiceBackendPort{Number: 80},
+				))),
+				Ingress(corev1.NamespaceDefault, "ingress-http-only", WithRule("my-host.local", WithPath(
+					// The following path should still work.
+					"/.well-known/acme-challenge", new(networkingv1.PathTypePrefix), "my-service", networkingv1.ServiceBackendPort{Number: 80},
+				))),
 			},
-			nil, nil, nil, nil,
+			nil, []corev1.Service{
+				Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 80, 30000, corev1.ProtocolTCP)),
+			}, nil, nil,
 		)
 
-		Expect(errs).To(HaveLen(1))
-		Expect(errs[0].Description).To(Equal("TLS secret doesn't exist"))
+		Expect(errs).To(ConsistOf(
+			MatchAllFields(Fields{
+				"Ingress":     testutil.HaveName("ingress-with-tls-secret-reference"),
+				"Description": Equal("TLS secret doesn't exist"),
+				"FieldPath":   Equal(field.NewPath("spec", "tls").Index(0).Child("secretName")),
+			}),
+		))
+		create := tree.ToCreatePayload(nil, "network-id", "eu01")
+		Expect(create.Listeners).To(HaveLen(1))
+		Expect(create.Listeners[0].Port).To(HaveValue(BeEquivalentTo(80)))
+		Expect(create.Listeners[0].Http.Hosts).To(HaveLen(1))
+		Expect(create.Listeners[0].Http.Hosts[0].Rules).To(HaveLen(1))
+		Expect(create.Listeners[0].Http.Hosts[0].Rules[0].Path).To(HaveValue(Equal("/.well-known/acme-challenge")))
+
 	})
 
 	It("should return an error when the TLS secret isn't of type TLS", func() {
@@ -169,26 +189,13 @@ var _ = Describe("WorkTreeALB", func() {
 			}, nil, nil, nil,
 		)
 
-		Expect(errs).To(HaveLen(1))
-		Expect(errs[0].Description).To(Equal("TLS secret isn't of type kubernetes.io/tls"))
-	})
-
-	It("should return an error when the TLS secret isn't of type TLS", func() {
-		_, errs := BuildTree(
-			&networkingv1.IngressClass{},
-			[]networkingv1.Ingress{
-				Ingress(corev1.NamespaceDefault, "ingress-with-tls-secret-reference", WithTLSSecret("non-tls")),
-			},
-			[]corev1.Secret{
-				{
-					ObjectMeta: metav1.ObjectMeta{Namespace: corev1.NamespaceDefault, Name: "non-tls"},
-					Type:       corev1.SecretTypeDockerConfigJson, // Not TLS
-				},
-			}, nil, nil, nil,
-		)
-
-		Expect(errs).To(HaveLen(1))
-		Expect(errs[0].Description).To(Equal("TLS secret isn't of type kubernetes.io/tls"))
+		Expect(errs).To(ConsistOf(
+			MatchAllFields(Fields{
+				"Ingress":     testutil.HaveName("ingress-with-tls-secret-reference"),
+				"Description": Equal("TLS secret isn't of type kubernetes.io/tls"),
+				"FieldPath":   Equal(field.NewPath("spec", "tls").Index(0).Child("secretName")),
+			}),
+		))
 	})
 
 	It("should return an error when TLS secret parsing fails", func() {
@@ -209,8 +216,13 @@ var _ = Describe("WorkTreeALB", func() {
 			}, nil, nil, nil,
 		)
 
-		Expect(errs).To(HaveLen(1))
-		Expect(errs[0].Description).To(Equal("invalid certificate: tls: failed to find any PEM data in certificate input"))
+		Expect(errs).To(ConsistOf(
+			MatchAllFields(Fields{
+				"Ingress":     testutil.HaveName("ingress-with-tls-secret-reference"),
+				"Description": Equal("invalid certificate: tls: failed to find any PEM data in certificate input"),
+				"FieldPath":   Equal(field.NewPath("spec", "tls").Index(0).Child("secretName")),
+			}),
+		))
 	})
 
 	It("should process TLS secret correctly and return it as missing certificate", func() {
