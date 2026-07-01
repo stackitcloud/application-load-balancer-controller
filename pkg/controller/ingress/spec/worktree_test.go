@@ -495,9 +495,12 @@ var _ = Describe("WorkTreeALB", func() {
 						},
 						WithAnnotation(AnnotationPriority, fmt.Sprintf("%d", prio)),
 						WithRule("my-host.local",
-							WithPath(fmt.Sprintf("/prio-%d-age-%d-%d-0", prio, age, alphabet), new(networkingv1.PathTypeExact), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
-							WithPath(fmt.Sprintf("/prio-%d-age-%d-%d-1", prio, age, alphabet), new(networkingv1.PathTypeExact), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
-							WithPath(fmt.Sprintf("/prio-%d-age-%d-%d-2", prio, age, alphabet), new(networkingv1.PathTypeExact), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
+							WithPath(fmt.Sprintf("/prio-%d-age-%d-%d-0", prio, age, alphabet), new(networkingv1.PathTypeExact),
+								"my-service", networkingv1.ServiceBackendPort{Number: 80}),
+							WithPath(fmt.Sprintf("/prio-%d-age-%d-%d-1", prio, age, alphabet), new(networkingv1.PathTypeExact),
+								"my-service", networkingv1.ServiceBackendPort{Number: 80}),
+							WithPath(fmt.Sprintf("/prio-%d-age-%d-%d-2", prio, age, alphabet), new(networkingv1.PathTypeExact),
+								"my-service", networkingv1.ServiceBackendPort{Number: 80}),
 						)))
 				}
 			}

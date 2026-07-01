@@ -23,7 +23,8 @@ const (
 	// fieldIndexService indexes all service references on an ingress. An ingress can be indexed multiple times.
 	fieldIndexService = ".spec.rules.http.paths.backend.service.name"
 	// fieldIndexSecret indexes all secret references on an ingress. An ingress can be indexed multiple times.
-	fieldIndexSecret = ".spec.tls.secret"
+	fieldIndexSecret = ".spec.tls.secret" //nolint:gosec // field index key, not a credential
+
 )
 
 // SetupWithManager sets up the controller with the Manager.

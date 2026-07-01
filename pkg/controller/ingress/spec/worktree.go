@@ -209,7 +209,7 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 					Ports:      map[uint16]any{},
 				}
 			}
-			tree.certificates[CertificateFingerprint(fingerprint)].Ports[uint16(httpsPort)] = nil
+			tree.certificates[CertificateFingerprint(fingerprint)].Ports[uint16(httpsPort)] = nil //nolint:gosec // httpsPort is bounds-checked above
 		}
 
 		for ruleIndex, rule := range ingress.Spec.Rules {
@@ -231,10 +231,12 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 
 				var httpAdded, httpsAdded bool
 				if !httpsOnly {
+					//nolint:gosec // httpPort is bounds-checked above
 					httpAdded, e = tree.addPath(ingressClass, ingress, rule, ruleIndex, path, pathIndex, uint16(httpPort), protocolHTTP)
 					errors = append(errors, e...)
 				}
 				if len(ingress.Spec.TLS) > 0 {
+					//nolint:gosec // httpsPort is bounds-checked above
 					httpsAdded, e = tree.addPath(ingressClass, ingress, rule, ruleIndex, path, pathIndex, uint16(httpsPort), protocolHTTPS)
 					errors = append(errors, e...)
 				}
