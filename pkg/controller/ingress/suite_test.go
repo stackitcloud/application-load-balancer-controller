@@ -1,4 +1,4 @@
-package ingress_test
+package ingress
 
 import (
 	"testing"

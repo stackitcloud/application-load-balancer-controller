@@ -1,302 +1,276 @@
 package ingress
 
 import (
-	"testing"
-
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	albsdk "github.com/stackitcloud/stackit-sdk-go/services/alb/v2api"
 	"k8s.io/utils/ptr"
 )
 
-func Test_updateNeeded(t *testing.T) {
-	tests := []struct {
-		name     string
-		current  *albsdk.LoadBalancer
-		desired  *albsdk.UpdateLoadBalancerPayload
-		expected bool
-	}{
-		{
-			name: "no changes",
-			current: &albsdk.LoadBalancer{
-				Listeners: []albsdk.Listener{
-					{Port: ptr.To[int32](80)},
-				},
+var _ = DescribeTable("updateNeeded",
+	func(current *albsdk.LoadBalancer, desired *albsdk.UpdateLoadBalancerPayload, expected bool) {
+		Expect(updateNeeded(current, desired)).To(Equal(expected))
+	},
+	Entry("no changes",
+		&albsdk.LoadBalancer{
+			Listeners: []albsdk.Listener{
+				{Port: ptr.To[int32](80)},
 			},
-			desired: &albsdk.UpdateLoadBalancerPayload{
-				Listeners: []albsdk.Listener{
-					{Port: ptr.To[int32](80)},
-				},
-			},
-			expected: false,
 		},
-		{
-			name: "port changed",
-			current: &albsdk.LoadBalancer{
-				Listeners: []albsdk.Listener{
-					{Port: ptr.To[int32](80)},
-				},
+		&albsdk.UpdateLoadBalancerPayload{
+			Listeners: []albsdk.Listener{
+				{Port: ptr.To[int32](80)},
 			},
-			desired: &albsdk.UpdateLoadBalancerPayload{
-				Listeners: []albsdk.Listener{
-					{Port: ptr.To[int32](443)},
-				},
-			},
-			expected: true,
 		},
-		{
-			name: "waf config changed",
-			current: &albsdk.LoadBalancer{
-				Listeners: []albsdk.Listener{
-					{WafConfigName: new("waf-1")},
-				},
+		false,
+	),
+	Entry("port changed",
+		&albsdk.LoadBalancer{
+			Listeners: []albsdk.Listener{
+				{Port: ptr.To[int32](80)},
 			},
-			desired: &albsdk.UpdateLoadBalancerPayload{
-				Listeners: []albsdk.Listener{
-					{WafConfigName: new("waf-2")},
-				},
-			},
-			expected: true,
 		},
-		{
-			name: "path prefix changed",
-			current: &albsdk.LoadBalancer{
-				Listeners: []albsdk.Listener{
-					{
-						Http: &albsdk.ProtocolOptionsHTTP{
-							Hosts: []albsdk.HostConfig{
-								{
-									Rules: []albsdk.Rule{
-										{Path: &albsdk.Path{Prefix: new("/api")}},
-									},
+		&albsdk.UpdateLoadBalancerPayload{
+			Listeners: []albsdk.Listener{
+				{Port: ptr.To[int32](443)},
+			},
+		},
+		true,
+	),
+	Entry("waf config changed",
+		&albsdk.LoadBalancer{
+			Listeners: []albsdk.Listener{
+				{WafConfigName: new("waf-1")},
+			},
+		},
+		&albsdk.UpdateLoadBalancerPayload{
+			Listeners: []albsdk.Listener{
+				{WafConfigName: new("waf-2")},
+			},
+		},
+		true,
+	),
+	Entry("path prefix changed",
+		&albsdk.LoadBalancer{
+			Listeners: []albsdk.Listener{
+				{
+					Http: &albsdk.ProtocolOptionsHTTP{
+						Hosts: []albsdk.HostConfig{
+							{
+								Rules: []albsdk.Rule{
+									{Path: &albsdk.Path{Prefix: new("/api")}},
 								},
 							},
 						},
 					},
 				},
 			},
-			desired: &albsdk.UpdateLoadBalancerPayload{
-				Listeners: []albsdk.Listener{
-					{
-						Http: &albsdk.ProtocolOptionsHTTP{
-							Hosts: []albsdk.HostConfig{
-								{
-									Rules: []albsdk.Rule{
-										{Path: &albsdk.Path{Prefix: new("/v2")}},
-									},
+		},
+		&albsdk.UpdateLoadBalancerPayload{
+			Listeners: []albsdk.Listener{
+				{
+					Http: &albsdk.ProtocolOptionsHTTP{
+						Hosts: []albsdk.HostConfig{
+							{
+								Rules: []albsdk.Rule{
+									{Path: &albsdk.Path{Prefix: new("/v2")}},
 								},
 							},
 						},
 					},
 				},
 			},
-			expected: true,
 		},
-		{
-			name: "path exact match changed",
-			current: &albsdk.LoadBalancer{
-				Listeners: []albsdk.Listener{
-					{
-						Http: &albsdk.ProtocolOptionsHTTP{
-							Hosts: []albsdk.HostConfig{
-								{
-									Rules: []albsdk.Rule{
-										{Path: &albsdk.Path{ExactMatch: new("/api")}},
-									},
+		true,
+	),
+	Entry("path exact match changed",
+		&albsdk.LoadBalancer{
+			Listeners: []albsdk.Listener{
+				{
+					Http: &albsdk.ProtocolOptionsHTTP{
+						Hosts: []albsdk.HostConfig{
+							{
+								Rules: []albsdk.Rule{
+									{Path: &albsdk.Path{ExactMatch: new("/api")}},
 								},
 							},
 						},
 					},
 				},
 			},
-			desired: &albsdk.UpdateLoadBalancerPayload{
-				Listeners: []albsdk.Listener{
-					{
-						Http: &albsdk.ProtocolOptionsHTTP{
-							Hosts: []albsdk.HostConfig{
-								{
-									Rules: []albsdk.Rule{
-										{Path: &albsdk.Path{ExactMatch: new("/v2")}},
-									},
+		},
+		&albsdk.UpdateLoadBalancerPayload{
+			Listeners: []albsdk.Listener{
+				{
+					Http: &albsdk.ProtocolOptionsHTTP{
+						Hosts: []albsdk.HostConfig{
+							{
+								Rules: []albsdk.Rule{
+									{Path: &albsdk.Path{ExactMatch: new("/v2")}},
 								},
 							},
 						},
 					},
 				},
 			},
-			expected: true,
 		},
-		{
-			name: "websocket changed",
-			current: &albsdk.LoadBalancer{
-				Listeners: []albsdk.Listener{
-					{
-						Http: &albsdk.ProtocolOptionsHTTP{
-							Hosts: []albsdk.HostConfig{
-								{
-									Rules: []albsdk.Rule{
-										{WebSocket: new(false)},
-									},
+		true,
+	),
+	Entry("websocket changed",
+		&albsdk.LoadBalancer{
+			Listeners: []albsdk.Listener{
+				{
+					Http: &albsdk.ProtocolOptionsHTTP{
+						Hosts: []albsdk.HostConfig{
+							{
+								Rules: []albsdk.Rule{
+									{WebSocket: new(false)},
 								},
 							},
 						},
 					},
 				},
 			},
-			desired: &albsdk.UpdateLoadBalancerPayload{
-				Listeners: []albsdk.Listener{
-					{
-						Http: &albsdk.ProtocolOptionsHTTP{
-							Hosts: []albsdk.HostConfig{
-								{
-									Rules: []albsdk.Rule{
-										{WebSocket: new(true)},
-									},
+		},
+		&albsdk.UpdateLoadBalancerPayload{
+			Listeners: []albsdk.Listener{
+				{
+					Http: &albsdk.ProtocolOptionsHTTP{
+						Hosts: []albsdk.HostConfig{
+							{
+								Rules: []albsdk.Rule{
+									{WebSocket: new(true)},
 								},
 							},
 						},
 					},
 				},
 			},
-			expected: true,
 		},
-		{
-			name: "https certificates changed",
-			current: &albsdk.LoadBalancer{
-				Listeners: []albsdk.Listener{
-					{
-						Https: &albsdk.ProtocolOptionsHTTPS{
-							CertificateConfig: &albsdk.CertificateConfig{
-								CertificateIds: []string{"cert1"},
-							},
+		true,
+	),
+	Entry("https certificates changed",
+		&albsdk.LoadBalancer{
+			Listeners: []albsdk.Listener{
+				{
+					Https: &albsdk.ProtocolOptionsHTTPS{
+						CertificateConfig: &albsdk.CertificateConfig{
+							CertificateIds: []string{"cert1"},
 						},
 					},
 				},
 			},
-			desired: &albsdk.UpdateLoadBalancerPayload{
-				Listeners: []albsdk.Listener{
-					{
-						Https: &albsdk.ProtocolOptionsHTTPS{
-							CertificateConfig: &albsdk.CertificateConfig{
-								CertificateIds: []string{"cert1", "cert2"},
-							},
+		},
+		&albsdk.UpdateLoadBalancerPayload{
+			Listeners: []albsdk.Listener{
+				{
+					Https: &albsdk.ProtocolOptionsHTTPS{
+						CertificateConfig: &albsdk.CertificateConfig{
+							CertificateIds: []string{"cert1", "cert2"},
 						},
 					},
 				},
 			},
-			expected: true,
 		},
-		{
-			name: "target pool port changed",
-			current: &albsdk.LoadBalancer{
-				TargetPools: []albsdk.TargetPool{
-					{TargetPort: ptr.To[int32](80)},
-				},
+		true,
+	),
+	Entry("target pool port changed",
+		&albsdk.LoadBalancer{
+			TargetPools: []albsdk.TargetPool{
+				{TargetPort: ptr.To[int32](80)},
 			},
-			desired: &albsdk.UpdateLoadBalancerPayload{
-				TargetPools: []albsdk.TargetPool{
-					{TargetPort: ptr.To[int32](443)},
-				},
-			},
-			expected: true,
 		},
-		{
-			name: "target pool tls validation changed",
-			current: &albsdk.LoadBalancer{
-				TargetPools: []albsdk.TargetPool{
-					{
-						TlsConfig: &albsdk.TlsConfig{
-							SkipCertificateValidation: new(false),
-						},
+		&albsdk.UpdateLoadBalancerPayload{
+			TargetPools: []albsdk.TargetPool{
+				{TargetPort: ptr.To[int32](443)},
+			},
+		},
+		true,
+	),
+	Entry("target pool tls validation changed",
+		&albsdk.LoadBalancer{
+			TargetPools: []albsdk.TargetPool{
+				{
+					TlsConfig: &albsdk.TlsConfig{
+						SkipCertificateValidation: new(false),
 					},
 				},
 			},
-			desired: &albsdk.UpdateLoadBalancerPayload{
-				TargetPools: []albsdk.TargetPool{
-					{
-						TlsConfig: &albsdk.TlsConfig{
-							SkipCertificateValidation: new(true),
-						},
+		},
+		&albsdk.UpdateLoadBalancerPayload{
+			TargetPools: []albsdk.TargetPool{
+				{
+					TlsConfig: &albsdk.TlsConfig{
+						SkipCertificateValidation: new(true),
 					},
 				},
 			},
-			expected: true,
 		},
-		{
-			name: "ACL added",
-			current: &albsdk.LoadBalancer{
-				Options: &albsdk.LoadBalancerOptions{
-					AccessControl: nil,
-				},
+		true,
+	),
+	Entry("ACL added",
+		&albsdk.LoadBalancer{
+			Options: &albsdk.LoadBalancerOptions{
+				AccessControl: nil,
 			},
-			desired: &albsdk.UpdateLoadBalancerPayload{
-				Options: &albsdk.LoadBalancerOptions{
-					AccessControl: &albsdk.LoadbalancerOptionAccessControl{AllowedSourceRanges: []string{"1.2.3.4/32"}},
-				},
-			},
-			expected: true,
 		},
-		{
-			name: "ACL removed",
-			current: &albsdk.LoadBalancer{
-				Options: &albsdk.LoadBalancerOptions{
-					AccessControl: &albsdk.LoadbalancerOptionAccessControl{AllowedSourceRanges: []string{"1.2.3.4/32"}},
-				},
+		&albsdk.UpdateLoadBalancerPayload{
+			Options: &albsdk.LoadBalancerOptions{
+				AccessControl: &albsdk.LoadbalancerOptionAccessControl{AllowedSourceRanges: []string{"1.2.3.4/32"}},
 			},
-			desired: &albsdk.UpdateLoadBalancerPayload{
-				Options: &albsdk.LoadBalancerOptions{
-					AccessControl: nil,
-				},
-			},
-			expected: true,
 		},
-		{
-			name: "ACL changed",
-			current: &albsdk.LoadBalancer{
-				Options: &albsdk.LoadBalancerOptions{
-					AccessControl: &albsdk.LoadbalancerOptionAccessControl{AllowedSourceRanges: []string{"1.2.3.4/32"}},
-				},
+		true,
+	),
+	Entry("ACL removed",
+		&albsdk.LoadBalancer{
+			Options: &albsdk.LoadBalancerOptions{
+				AccessControl: &albsdk.LoadbalancerOptionAccessControl{AllowedSourceRanges: []string{"1.2.3.4/32"}},
 			},
-			desired: &albsdk.UpdateLoadBalancerPayload{
-				Options: &albsdk.LoadBalancerOptions{
-					AccessControl: &albsdk.LoadbalancerOptionAccessControl{AllowedSourceRanges: []string{"2.3.4.5/32"}},
-				},
-			},
-			expected: true,
 		},
-		{
-			name: "ACL unchanged",
-			current: &albsdk.LoadBalancer{
-				Options: &albsdk.LoadBalancerOptions{
-					AccessControl: &albsdk.LoadbalancerOptionAccessControl{AllowedSourceRanges: []string{"1.2.3.4/32"}},
-				},
+		&albsdk.UpdateLoadBalancerPayload{
+			Options: &albsdk.LoadBalancerOptions{
+				AccessControl: nil,
 			},
-			desired: &albsdk.UpdateLoadBalancerPayload{
-				Options: &albsdk.LoadBalancerOptions{
-					AccessControl: &albsdk.LoadbalancerOptionAccessControl{AllowedSourceRanges: []string{"1.2.3.4/32"}},
-				},
-			},
-			expected: false,
 		},
-		{
-			name: "ACL none",
-			current: &albsdk.LoadBalancer{
-				Options: &albsdk.LoadBalancerOptions{
-					AccessControl: nil,
-				},
+		true,
+	),
+	Entry("ACL changed",
+		&albsdk.LoadBalancer{
+			Options: &albsdk.LoadBalancerOptions{
+				AccessControl: &albsdk.LoadbalancerOptionAccessControl{AllowedSourceRanges: []string{"1.2.3.4/32"}},
 			},
-			desired: &albsdk.UpdateLoadBalancerPayload{
-				Options: &albsdk.LoadBalancerOptions{
-					AccessControl: nil,
-				},
-			},
-			expected: false,
 		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := updateNeeded(tt.current, tt.desired); got != tt.expected {
-				t.Errorf("updateNeeded() = %v, want %v", got, tt.expected)
-			}
-		})
-	}
-}
+		&albsdk.UpdateLoadBalancerPayload{
+			Options: &albsdk.LoadBalancerOptions{
+				AccessControl: &albsdk.LoadbalancerOptionAccessControl{AllowedSourceRanges: []string{"2.3.4.5/32"}},
+			},
+		},
+		true,
+	),
+	Entry("ACL unchanged",
+		&albsdk.LoadBalancer{
+			Options: &albsdk.LoadBalancerOptions{
+				AccessControl: &albsdk.LoadbalancerOptionAccessControl{AllowedSourceRanges: []string{"1.2.3.4/32"}},
+			},
+		},
+		&albsdk.UpdateLoadBalancerPayload{
+			Options: &albsdk.LoadBalancerOptions{
+				AccessControl: &albsdk.LoadbalancerOptionAccessControl{AllowedSourceRanges: []string{"1.2.3.4/32"}},
+			},
+		},
+		false,
+	),
+	Entry("ACL none",
+		&albsdk.LoadBalancer{
+			Options: &albsdk.LoadBalancerOptions{
+				AccessControl: nil,
+			},
+		},
+		&albsdk.UpdateLoadBalancerPayload{
+			Options: &albsdk.LoadBalancerOptions{
+				AccessControl: nil,
+			},
+		},
+		false,
+	),
+)

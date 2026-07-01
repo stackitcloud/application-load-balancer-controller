@@ -1,4 +1,4 @@
-package ingress_test
+package ingress
 
 import (
 	"context"
@@ -9,7 +9,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress"
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress/spec"
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress/spec/testdata"
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/stackit"
@@ -30,12 +29,10 @@ import (
 )
 
 const (
-	projectID      = "dummy-project-id"
-	region         = "eu01"
-	networkID      = "my-network"
-	controllerName = "stackit.cloud/alb-ingress"
-	finalizerName  = "stackit.cloud/alb-ingress"
-	targetCertID   = "real-certificate-uuid-abc-123"
+	projectID    = "dummy-project-id"
+	region       = "eu01"
+	networkID    = "my-network"
+	targetCertID = "real-certificate-uuid-abc-123"
 )
 
 var _ = Describe("IngressClassController", func() {
@@ -90,7 +87,7 @@ var _ = Describe("IngressClassController", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		reconciler := ingress.IngressClassReconciler{
+		reconciler := IngressClassReconciler{
 			Recorder:          recorder,
 			Client:            mgr.GetClient(),
 			ALBClient:         albClient,
