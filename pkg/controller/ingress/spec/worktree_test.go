@@ -146,11 +146,10 @@ var _ = Describe("WorkTreeALB", func() {
 		tree, errs := BuildTree(
 			&networkingv1.IngressClass{},
 			[]networkingv1.Ingress{
-				Ingress(corev1.NamespaceDefault, "ingress-with-tls-secret-reference", WithAnnotation(AnnotationHTTPSOnly, "true"), WithTLSSecret("doesnt-exist"), WithRule("my-host.local", WithPath(
+				Ingress(corev1.NamespaceDefault, "ingress-with-tls-secret-reference", WithTLSSecret("doesnt-exist"), WithRule("my-host.local", WithPath(
 					"/", new(networkingv1.PathTypePrefix), "my-service", networkingv1.ServiceBackendPort{Number: 80},
 				))),
 				Ingress(corev1.NamespaceDefault, "ingress-http-only", WithRule("my-host.local", WithPath(
-					// The following path should still work.
 					"/.well-known/acme-challenge", new(networkingv1.PathTypePrefix), "my-service", networkingv1.ServiceBackendPort{Number: 80},
 				))),
 			},
@@ -167,12 +166,13 @@ var _ = Describe("WorkTreeALB", func() {
 			}),
 		))
 		create := tree.ToCreatePayload(nil, "network-id", "eu01")
+		// HTTP rules should still work.
 		Expect(create.Listeners).To(HaveLen(1))
 		Expect(create.Listeners[0].Port).To(HaveValue(BeEquivalentTo(80)))
 		Expect(create.Listeners[0].Http.Hosts).To(HaveLen(1))
-		Expect(create.Listeners[0].Http.Hosts[0].Rules).To(HaveLen(1))
-		Expect(create.Listeners[0].Http.Hosts[0].Rules[0].Path).To(HaveValue(Equal("/.well-known/acme-challenge")))
-
+		Expect(create.Listeners[0].Http.Hosts[0].Rules).To(HaveLen(2))
+		Expect(create.Listeners[0].Http.Hosts[0].Rules[0].Path.Prefix).To(HaveValue(Equal("/.well-known/acme-challenge")))
+		Expect(create.Listeners[0].Http.Hosts[0].Rules[1].Path.Prefix).To(HaveValue(Equal("/")))
 	})
 
 	It("should return an error when the TLS secret isn't of type TLS", func() {
