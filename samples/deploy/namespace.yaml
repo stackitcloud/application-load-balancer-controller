@@ -1,7 +1,0 @@
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: stackit-alb-system
-  labels:
-    app.kubernetes.io/name: application-load-balancer-controller
-    app.kubernetes.io/part-of: stackit-alb

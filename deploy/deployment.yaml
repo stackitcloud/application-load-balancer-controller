@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: application-load-balancer-controller
-  namespace: stackit-alb-system
+  namespace: kube-system
   labels:
     app.kubernetes.io/name: application-load-balancer-controller
     app.kubernetes.io/part-of: stackit-alb
@@ -28,19 +28,18 @@ spec:
           type: RuntimeDefault
       containers:
         - name: manager
-          image: ghcr.io/stackitcloud/application-load-balancer-controller-dev:12f902a
-          imagePullPolicy: IfNotPresent
+          image: ghcr.io/stackitcloud/application-load-balancer-controller-dev:albc
+          imagePullPolicy: Always
           args:
-            - --cloud-config=/etc/stackit-alb/cloud-config.yaml
+            - --cloud-config=/etc/config/cloud.yaml
             - --leader-elect=true
-            - --leader-election-namespace=stackit-alb-system
+            - --leader-election-namespace=kube-system
             - --health-probe-bind-address=:8081
             - --metrics-bind-address=:8080
             - --zap-log-level=info
           env:
-            # The STACKIT SDK picks up the service-account key from this path.
-            - name: STACKIT_SERVICE_ACCOUNT_KEY_PATH
-              value: /etc/stackit-alb/sa-key.json
+          - name: STACKIT_SERVICE_ACCOUNT_KEY_PATH
+            value: /etc/serviceaccount/sa_key.json
           ports:
             - name: metrics
               containerPort: 8080
@@ -74,12 +73,15 @@ spec:
               drop:
                 - ALL
           volumeMounts:
-            - name: config
-              mountPath: /etc/stackit-alb
-              readOnly: true
+          - mountPath: /etc/config
+            name: cloud-config
+          - mountPath: /etc/serviceaccount
+            name: cloud-secret
       volumes:
-        - name: config
-          secret:
-            secretName: application-load-balancer-controller-config
-            defaultMode: 0o400
+      - name: cloud-config
+        configMap:
+          name: stackit-cloud-config
+      - name: cloud-secret
+        secret:
+          secretName: stackit-cloud-secret
       terminationGracePeriodSeconds: 30
