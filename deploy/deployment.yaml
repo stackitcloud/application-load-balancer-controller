@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: application-load-balancer-controller
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: application-load-balancer-controller
+    app.kubernetes.io/part-of: stackit-alb
+spec:
+  # Leader election is enabled, so it is safe to scale up for HA.
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: application-load-balancer-controller
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: application-load-balancer-controller
+        app.kubernetes.io/part-of: stackit-alb
+    spec:
+      serviceAccountName: application-load-balancer-controller
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: manager
+          image: ghcr.io/stackitcloud/application-load-balancer-controller-dev:albc
+          imagePullPolicy: Always
+          args:
+            - --cloud-config=/etc/config/cloud.yaml
+            - --leader-elect=true
+            - --leader-election-namespace=kube-system
+            - --health-probe-bind-address=:8081
+            - --metrics-bind-address=:8080
+            - --zap-log-level=info
+          env:
+          - name: STACKIT_SERVICE_ACCOUNT_KEY_PATH
+            value: /etc/serviceaccount/sa_key.json
+          ports:
+            - name: metrics
+              containerPort: 8080
+              protocol: TCP
+            - name: probes
+              containerPort: 8081
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: probes
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: probes
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+          - mountPath: /etc/config
+            name: cloud-config
+          - mountPath: /etc/serviceaccount
+            name: cloud-secret
+      volumes:
+      - name: cloud-config
+        configMap:
+          name: stackit-cloud-config
+      - name: cloud-secret
+        secret:
+          secretName: stackit-cloud-secret
+      terminationGracePeriodSeconds: 30
