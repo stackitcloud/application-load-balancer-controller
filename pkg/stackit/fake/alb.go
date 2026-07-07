@@ -174,7 +174,7 @@ func (a *ALB) UpdateLoadBalancer(
 }
 
 func (a *ALB) UpdateTargetPool(
-	_ context.Context, projectID, region, name, targetPoolName string, payload albsdk.UpdateTargetPoolPayload,
+	_ context.Context, _, _, _, _ string, _ albsdk.UpdateTargetPoolPayload,
 ) error {
 	panic("not implemented")
 }
@@ -205,25 +205,25 @@ func (a *ALB) record(method string, args ...any) {
 }
 
 func (a *ALB) CreateCredentials(
-	_ context.Context, projectID, region string, payload albsdk.CreateCredentialsPayload,
+	_ context.Context, _, _ string, _ albsdk.CreateCredentialsPayload,
 ) (*albsdk.CreateCredentialsResponse, error) {
 	panic("not implemented")
 }
 
-func (a *ALB) ListCredentials(_ context.Context, projectID, region string) (*albsdk.ListCredentialsResponse, error) {
+func (a *ALB) ListCredentials(_ context.Context, _, _ string) (*albsdk.ListCredentialsResponse, error) {
 	panic("not implemented")
 }
 
-func (a *ALB) GetCredentials(_ context.Context, projectID, region, ref string) (*albsdk.GetCredentialsResponse, error) {
+func (a *ALB) GetCredentials(_ context.Context, _, _, _ string) (*albsdk.GetCredentialsResponse, error) {
 	panic("not implemented")
 }
 
 func (a *ALB) UpdateCredentials(
-	_ context.Context, projectID, region, ref string, payload albsdk.UpdateCredentialsPayload,
+	_ context.Context, _, _, _ string, _ albsdk.UpdateCredentialsPayload,
 ) error {
 	panic("not implemented")
 }
 
-func (a *ALB) DeleteCredentials(_ context.Context, projectID, region, ref string) error {
+func (a *ALB) DeleteCredentials(_ context.Context, _, _, _ string) error {
 	panic("not implemented")
 }

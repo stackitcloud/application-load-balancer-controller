@@ -250,7 +250,8 @@ var _ = Describe("IngressClassController", func() {
 			testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, &secret)
 			service := Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("http", 80, 30000, corev1.ProtocolTCP))
 			testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, &service)
-			ingress := Ingress(corev1.NamespaceDefault, "my-ingress", WithIngressClass(ingressClass.Name), WithAnnotation(spec.AnnotationHTTPSOnly, "true"), WithTLSSecret(secret.Name),
+			ingress := Ingress(corev1.NamespaceDefault, "my-ingress", WithIngressClass(ingressClass.Name),
+				WithAnnotation(spec.AnnotationHTTPSOnly, "true"), WithTLSSecret(secret.Name),
 				WithRule("my-host.local", WithPath("/", new(networkingv1.PathTypePrefix), service.Name, networkingv1.ServiceBackendPort{Number: 80})),
 			)
 			testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, &ingress)
