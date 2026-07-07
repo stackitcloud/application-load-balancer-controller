@@ -6,6 +6,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	. "github.com/onsi/gomega/gstruct"
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress/spec"
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress/spec/testdata"
 	stackitconfig "github.com/stackitcloud/application-load-balancer-controller/pkg/stackit/config"
@@ -14,6 +15,7 @@ import (
 	. "github.com/stackitcloud/application-load-balancer-controller/pkg/testutil/ingress"
 	. "github.com/stackitcloud/application-load-balancer-controller/pkg/testutil/service"
 	albsdk "github.com/stackitcloud/stackit-sdk-go/services/alb/v2api"
+	"github.com/stackitcloud/stackit-sdk-go/services/certificates/v2api"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -215,6 +217,57 @@ var _ = Describe("IngressClassController", func() {
 			Expect(certs).To(HaveLen(1))
 			lb := albFake.LoadBalancer(projectID, region, spec.LoadBalancerName(ingressClass))
 			Expect(lb.Listeners[1].Https.CertificateConfig.CertificateIds).To(ConsistOf(*certs[0].Id))
+		})
+
+		It("should delete duplicate certificates in the API", func(ctx context.Context) {
+			_, err := certFake.CreateCertificate(ctx, projectID, region, &v2api.CreateCertificatePayload{
+				Labels: &map[string]string{
+					spec.LabelIngressClassUID: string(ingressClass.UID),
+				},
+				Name:       new("duplicate-cert-1"),
+				PrivateKey: new(testdata.FixtureTLS1PrivateKey),
+				PublicKey:  new(testdata.FixtureTLS1PublicKey),
+			})
+			Expect(err).NotTo(HaveOccurred())
+			_, err = certFake.CreateCertificate(ctx, projectID, region, &v2api.CreateCertificatePayload{
+				Labels: &map[string]string{
+					spec.LabelIngressClassUID: string(ingressClass.UID),
+				},
+				Name:       new("duplicate-cert-2"),
+				PrivateKey: new(testdata.FixtureTLS1PrivateKey),
+				PublicKey:  new(testdata.FixtureTLS1PublicKey),
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			secret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Namespace: corev1.NamespaceDefault, Name: "my-tls-cert"},
+				Type:       corev1.SecretTypeTLS,
+				Data: map[string][]byte{
+					corev1.TLSCertKey:       []byte(testdata.FixtureTLS1PublicKey),
+					corev1.TLSPrivateKeyKey: []byte(testdata.FixtureTLS1PrivateKey),
+				},
+			}
+			testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, &secret)
+			service := Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("http", 80, 30000, corev1.ProtocolTCP))
+			testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, &service)
+			ingress := Ingress(corev1.NamespaceDefault, "my-ingress", WithIngressClass(ingressClass.Name), WithAnnotation(spec.AnnotationHTTPSOnly, "true"), WithTLSSecret(secret.Name),
+				WithRule("my-host.local", WithPath("/", new(networkingv1.PathTypePrefix), service.Name, networkingv1.ServiceBackendPort{Number: 80})),
+			)
+			testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, &ingress)
+
+			Eventually(func(g Gomega) {
+				lb := albFake.LoadBalancer(projectID, region, spec.LoadBalancerName(ingressClass))
+				g.Expect(lb).NotTo(BeNil())
+				g.Expect(lb.Listeners).To(HaveLen(1))
+				g.Expect(lb.Listeners[0].Https).NotTo(BeNil())
+				g.Expect(lb.Listeners[0].Https.CertificateConfig.CertificateIds).To(HaveLen(1))
+
+				g.Expect(certFake.Certificates()).To(ConsistOf(
+					HaveValue(MatchFields(IgnoreExtras, Fields{
+						"Id": HaveValue(Equal(lb.Listeners[0].Https.CertificateConfig.CertificateIds[0])),
+					})),
+				))
+			}).Should(Succeed())
 		})
 
 		// TODO: Test changes to nodes
