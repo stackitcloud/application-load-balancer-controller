@@ -7,6 +7,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gstruct"
+	"github.com/onsi/gomega/types"
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress/spec/testdata"
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/testutil"
 	. "github.com/stackitcloud/application-load-balancer-controller/pkg/testutil/ingress"
@@ -761,6 +762,107 @@ var _ = Describe("WorkTreeALB", func() {
 				DisplayName: new("node-that-meets-all-criteria"),
 				Ip:          new("10.0.0.1"),
 			},
+		))
+	})
+
+	It("should have all slices ordered consistently", func() {
+		tree, errs := BuildTree(
+			&networkingv1.IngressClass{},
+			[]networkingv1.Ingress{
+				Ingress(corev1.NamespaceDefault, "ingress-1", WithUID("ingress-1-uid"), WithRule("b.local",
+					WithPath("/", new(networkingv1.PathTypePrefix), "service-b", networkingv1.ServiceBackendPort{Number: 80}),
+				)),
+				Ingress(corev1.NamespaceDefault, "ingress-2", WithUID("ingress-2-uid"), WithAnnotation(AnnotationHTTPPort, "8080"),
+					WithRule("c.local", WithPath("/", new(networkingv1.PathTypePrefix), "service-c", networkingv1.ServiceBackendPort{Number: 80})),
+					WithRule("a.local", WithPath("/", new(networkingv1.PathTypePrefix), "service-a", networkingv1.ServiceBackendPort{Number: 80})),
+				),
+			},
+			nil,
+			[]corev1.Service{
+				Service(corev1.NamespaceDefault, "service-c", WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 80, 30002, corev1.ProtocolTCP)),
+				Service(corev1.NamespaceDefault, "service-b", WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 80, 30001, corev1.ProtocolTCP)),
+				Service(corev1.NamespaceDefault, "service-a", WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 80, 30000, corev1.ProtocolTCP)),
+			}, []corev1.Node{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "node-b",
+					},
+					Status: corev1.NodeStatus{
+						Addresses: []corev1.NodeAddress{
+							{
+								Type:    corev1.NodeInternalIP,
+								Address: "10.0.0.2",
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "node-a",
+					},
+					Status: corev1.NodeStatus{
+						Addresses: []corev1.NodeAddress{
+							{
+								Type:    corev1.NodeInternalIP,
+								Address: "10.0.0.1",
+							},
+						},
+					},
+				},
+			}, nil,
+		)
+
+		Expect(errs).To(BeEmpty())
+		create := tree.ToCreatePayload(nil, "network-id", "region")
+		// Sorting of path is done in a separate test.
+		Expect(create.Listeners).To(HaveExactElements(
+			MatchFields(IgnoreExtras, Fields{
+				"Port": HaveValue(BeEquivalentTo(80)),
+				"Http": HaveValue(MatchFields(IgnoreExtras, Fields{
+					"Hosts": HaveExactElements(
+						MatchFields(IgnoreExtras, Fields{
+							"Host": HaveValue(Equal("b.local")),
+						}),
+					),
+				})),
+			}),
+			MatchFields(IgnoreExtras, Fields{
+				"Port": HaveValue(BeEquivalentTo(8080)),
+				"Http": HaveValue(MatchFields(IgnoreExtras, Fields{
+					"Hosts": HaveExactElements(
+						MatchFields(IgnoreExtras, Fields{
+							"Host": HaveValue(Equal("a.local")),
+						}),
+						MatchFields(IgnoreExtras, Fields{
+							"Host": HaveValue(Equal("c.local")),
+						}),
+					),
+				})),
+			}),
+		))
+		haveTargets := func() types.GomegaMatcher {
+			return HaveExactElements(
+				MatchFields(IgnoreExtras, Fields{
+					"Ip": HaveValue(Equal("10.0.0.1")),
+				}),
+				MatchFields(IgnoreExtras, Fields{
+					"Ip": HaveValue(Equal("10.0.0.2")),
+				}),
+			)
+		}
+		Expect(create.TargetPools).To(HaveExactElements(
+			MatchFields(IgnoreExtras, Fields{
+				"Name":    HaveValue(Equal("ingress-1-uid-0-0")),
+				"Targets": haveTargets(),
+			}),
+			MatchFields(IgnoreExtras, Fields{
+				"Name":    HaveValue(Equal("ingress-2-uid-0-0")),
+				"Targets": haveTargets(),
+			}),
+			MatchFields(IgnoreExtras, Fields{
+				"Name":    HaveValue(Equal("ingress-2-uid-1-0")),
+				"Targets": haveTargets(),
+			}),
 		))
 	})
 })

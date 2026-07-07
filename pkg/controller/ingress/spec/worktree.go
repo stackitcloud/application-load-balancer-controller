@@ -446,6 +446,9 @@ func ValidateTLSCertAndFingerprint(publicKey, privateKey []byte) (string, error)
 	return hex.EncodeToString(sha256Hash[:]), nil
 }
 
+// getTargetsOfNodes returns all targets that should be used for the application load balancer.
+// It filters out nodes that don't qualify as targets.
+// The returned slice is sorted.
 func getTargetsOfNodes(nodes []corev1.Node) []albsdk.Target {
 	targets := []albsdk.Target{}
 	for i := range nodes {
@@ -464,6 +467,9 @@ func getTargetsOfNodes(nodes []corev1.Node) []albsdk.Target {
 			}
 		}
 	}
+	slices.SortFunc(targets, func(a, b albsdk.Target) int {
+		return cmp.Compare(*a.Ip, *b.Ip)
+	})
 	return targets
 }
 
@@ -503,6 +509,8 @@ func (t *WorkTreeALB) GetUnusedCertificates(existingCerts map[CertificateFingerp
 //
 // certificateIDMap must contain all certificates that exist in the API for this ALB.
 // Certificates that are referenced in t but missing in certificateIDMap are not included in the payload.
+//
+// All lists in the update payload are sorted to simplify change detection.
 func (t *WorkTreeALB) ToCreatePayload( //nolint:gocyclo,funlen // Breaking up this function won't make it much simpler.
 	certificateIDMap map[CertificateFingerprint]string,
 	networkID string,
@@ -513,20 +521,7 @@ func (t *WorkTreeALB) ToCreatePayload( //nolint:gocyclo,funlen // Breaking up th
 		hosts := []albsdk.HostConfig{}
 		for hostname, host := range listener.hosts {
 			paths := slices.Collect(maps.Values(host.paths))
-			typeRank := map[networkingv1.PathType]int{
-				networkingv1.PathTypeExact:                  1,
-				networkingv1.PathTypeImplementationSpecific: 2,
-				networkingv1.PathTypePrefix:                 3,
-			}
-			slices.SortFunc(paths, func(a, b *workTreePath) int {
-				if x := cmp.Compare(typeRank[a.path.pathType], typeRank[b.path.pathType]); x != 0 {
-					return x
-				}
-				if x := cmp.Compare(len(b.path.path), len(a.path.path)); x != 0 {
-					return x
-				}
-				return cmp.Compare(a.path.path, b.path.path)
-			})
+			sortPaths(paths)
 			rules := []albsdk.Rule{}
 			for _, path := range paths {
 				rule := albsdk.Rule{
@@ -553,6 +548,7 @@ func (t *WorkTreeALB) ToCreatePayload( //nolint:gocyclo,funlen // Breaking up th
 				Rules: rules,
 			})
 		}
+		sortHosts(hosts)
 
 		var https *albsdk.ProtocolOptionsHTTPS
 		prot := protocolHTTP
@@ -571,6 +567,7 @@ func (t *WorkTreeALB) ToCreatePayload( //nolint:gocyclo,funlen // Breaking up th
 					https.CertificateConfig.CertificateIds = append(https.CertificateConfig.CertificateIds, id)
 				}
 			}
+			slices.Sort(https.CertificateConfig.CertificateIds)
 			if len(https.CertificateConfig.CertificateIds) == 0 {
 				// The API doesn't allow an HTTPS port without certificate. So we drop the port if no certificate was provided.
 				continue
@@ -592,6 +589,7 @@ func (t *WorkTreeALB) ToCreatePayload( //nolint:gocyclo,funlen // Breaking up th
 			Https: https,
 		})
 	}
+	sortListeners(listeners)
 
 	if len(listeners) == 0 {
 		// The ALB doesn't allow zero listeners. To already create it we create an empty listener on port 80.
@@ -609,9 +607,7 @@ func (t *WorkTreeALB) ToCreatePayload( //nolint:gocyclo,funlen // Breaking up th
 	for _, targetPool := range t.targetPools {
 		targetPools = append(targetPools, *targetPool)
 	}
-	slices.SortFunc(targetPools, func(a, b albsdk.TargetPool) int {
-		return cmp.Compare(*a.Name, *b.Name)
-	})
+	sortTargetPools(targetPools)
 
 	var externalAddress *string
 	if t.externalIP != "" {
@@ -654,9 +650,7 @@ func (t *WorkTreeALB) ToCreatePayload( //nolint:gocyclo,funlen // Breaking up th
 //
 // See ToCreatePayload for more details.
 //
-// The log configuration is taking from the existing load balancer to allow for out-of-band changes of this field.
-//
-// The output is deterministic for easier change detection. //TODO: Make sure this is actually the case.
+// The log configuration is taken from the existing load balancer to allow for out-of-band changes of this field.
 func (t *WorkTreeALB) ToUpdatePayload(
 	certificateIDMap map[CertificateFingerprint]string,
 	networkID string,
@@ -693,4 +687,41 @@ func isNodeTerminating(node *corev1.Node) bool {
 		}
 	}
 	return false
+}
+
+// pathTypeRank ranks the path types in the order in which the should appear in the ALB, lowest number first.
+var pathTypeRank = map[networkingv1.PathType]int{
+	networkingv1.PathTypeExact:                  1,
+	networkingv1.PathTypeImplementationSpecific: 2,
+	networkingv1.PathTypePrefix:                 3,
+}
+
+func sortPaths(paths []*workTreePath) {
+	slices.SortFunc(paths, func(a, b *workTreePath) int {
+		if x := cmp.Compare(pathTypeRank[a.path.pathType], pathTypeRank[b.path.pathType]); x != 0 {
+			return x
+		}
+		if x := cmp.Compare(len(b.path.path), len(a.path.path)); x != 0 {
+			return x
+		}
+		return cmp.Compare(a.path.path, b.path.path)
+	})
+}
+
+func sortListeners(listeners []albsdk.Listener) {
+	slices.SortFunc(listeners, func(a, b albsdk.Listener) int {
+		return int(*a.Port - *b.Port)
+	})
+}
+
+func sortTargetPools(targetPools []albsdk.TargetPool) {
+	slices.SortFunc(targetPools, func(a, b albsdk.TargetPool) int {
+		return cmp.Compare(*a.Name, *b.Name)
+	})
+}
+
+func sortHosts(hosts []albsdk.HostConfig) {
+	slices.SortFunc(hosts, func(a, b albsdk.HostConfig) int {
+		return cmp.Compare(*a.Host, *b.Host)
+	})
 }
