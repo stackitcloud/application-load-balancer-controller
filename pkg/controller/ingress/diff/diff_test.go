@@ -1,4 +1,4 @@
-package ingress
+package diff
 
 import (
 	. "github.com/onsi/ginkgo/v2"
@@ -7,9 +7,9 @@ import (
 	"k8s.io/utils/ptr"
 )
 
-var _ = DescribeTable("updateNeeded",
+var _ = DescribeTable("UpdateNeeded",
 	func(current *albsdk.LoadBalancer, desired *albsdk.UpdateLoadBalancerPayload, expected bool) {
-		Expect(updateNeeded(current, desired)).To(Equal(expected))
+		Expect(UpdateNeeded(current, desired)).To(Equal(expected))
 	},
 	Entry("empty",
 		&albsdk.LoadBalancer{},
