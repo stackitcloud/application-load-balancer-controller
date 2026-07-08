@@ -161,7 +161,7 @@ var _ = Describe("IngressClassController", func() {
 	})
 
 	// The ALB is already created when BeforeEach completes.
-	Context("with IngressClass matching the controller", func() {
+	Context("with IngressClass matching the controller and no annotations", func() {
 		var ingressClass *networkingv1.IngressClass
 
 		BeforeEach(func(ctx context.Context) {
@@ -271,7 +271,88 @@ var _ = Describe("IngressClassController", func() {
 			}).Should(Succeed())
 		})
 
+		It("should set the public IP of the ALB in the status of each ingress for a public LB", func(ctx context.Context) {
+			service := Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("http", 80, 30000, corev1.ProtocolTCP))
+			testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, &service)
+			ingress1 := Ingress(corev1.NamespaceDefault, "ingress-1", WithIngressClass(ingressClass.Name),
+				WithRule("host1.local", WithPath("/", new(networkingv1.PathTypePrefix), service.Name, networkingv1.ServiceBackendPort{Number: 80})),
+			)
+			testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, &ingress1)
+			ingress2 := Ingress(corev1.NamespaceDefault, "ingress-2", WithIngressClass(ingressClass.Name),
+				WithRule("host2.local", WithPath("/", new(networkingv1.PathTypePrefix), service.Name, networkingv1.ServiceBackendPort{Number: 80})),
+			)
+			testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, &ingress2)
+
+			Eventually(ctx, testutil.KubernetesResource(k8sClient, &ingress1)).Should(HaveValue(MatchFields(IgnoreExtras, Fields{
+				"Status": MatchFields(IgnoreExtras, Fields{
+					"LoadBalancer": MatchFields(IgnoreExtras, Fields{
+						"Ingress": HaveExactElements(MatchFields(IgnoreExtras, Fields{
+							"IP": Equal(albFake.ExternalAddress),
+						})),
+					}),
+				}),
+			})))
+			Eventually(ctx, testutil.KubernetesResource(k8sClient, &ingress2)).Should(HaveValue(MatchFields(IgnoreExtras, Fields{
+				"Status": MatchFields(IgnoreExtras, Fields{
+					"LoadBalancer": MatchFields(IgnoreExtras, Fields{
+						"Ingress": HaveExactElements(MatchFields(IgnoreExtras, Fields{
+							"IP": Equal(albFake.ExternalAddress),
+						})),
+					}),
+				}),
+			})))
+		})
+
 		// TODO: Test changes to nodes
+	})
+
+	It("should set the private IP of the ALB in the status of each ingress for a private LB", func(ctx context.Context) {
+		ingressClass := &networkingv1.IngressClass{
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: "ingressclass-",
+				Annotations: map[string]string{
+					spec.AnnotationInternal: "true",
+				},
+			},
+			Spec: networkingv1.IngressClassSpec{
+				Controller: controllerName,
+			},
+		}
+		testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, ingressClass)
+		// Wait until the load balancer is created.
+		Eventually(func() *albsdk.LoadBalancer {
+			return albFake.LoadBalancer(projectID, region, spec.LoadBalancerName(ingressClass))
+		}).ShouldNot(BeNil())
+
+		service := Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("http", 80, 30000, corev1.ProtocolTCP))
+		testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, &service)
+		ingress1 := Ingress(corev1.NamespaceDefault, "ingress-1", WithIngressClass(ingressClass.Name),
+			WithRule("host1.local", WithPath("/", new(networkingv1.PathTypePrefix), service.Name, networkingv1.ServiceBackendPort{Number: 80})),
+		)
+		testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, &ingress1)
+		ingress2 := Ingress(corev1.NamespaceDefault, "ingress-2", WithIngressClass(ingressClass.Name),
+			WithRule("host2.local", WithPath("/", new(networkingv1.PathTypePrefix), service.Name, networkingv1.ServiceBackendPort{Number: 80})),
+		)
+		testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, &ingress2)
+
+		Eventually(ctx, testutil.KubernetesResource(k8sClient, &ingress1)).Should(HaveValue(MatchFields(IgnoreExtras, Fields{
+			"Status": MatchFields(IgnoreExtras, Fields{
+				"LoadBalancer": MatchFields(IgnoreExtras, Fields{
+					"Ingress": HaveExactElements(MatchFields(IgnoreExtras, Fields{
+						"IP": Equal(albFake.PrivateAddress),
+					})),
+				}),
+			}),
+		})))
+		Eventually(ctx, testutil.KubernetesResource(k8sClient, &ingress2)).Should(HaveValue(MatchFields(IgnoreExtras, Fields{
+			"Status": MatchFields(IgnoreExtras, Fields{
+				"LoadBalancer": MatchFields(IgnoreExtras, Fields{
+					"Ingress": HaveExactElements(MatchFields(IgnoreExtras, Fields{
+						"IP": Equal(albFake.PrivateAddress),
+					})),
+				}),
+			}),
+		})))
 	})
 })
 

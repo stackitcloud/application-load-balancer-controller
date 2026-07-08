@@ -44,3 +44,15 @@ func CreateKubernetesResourceAndDeferDeletion(ctx context.Context, cl client.Cli
 		DeleteAndWaitForKubernetesResource(ctx, cl, obj)
 	})
 }
+
+// KubernetesResource is a helper that should be used with Eventually() like this: Eventually(ctx, KubernetesResource(client, obj)).Should(HaveDeletionTimestamp()).
+// It retrieves and returns obj to make assertions on it.
+func KubernetesResource(cl client.Client, obj client.Object) func(ctx context.Context) (client.Object, error) {
+	key := client.ObjectKeyFromObject(obj)
+	return func(ctx context.Context) (client.Object, error) {
+		if err := cl.Get(ctx, key, obj); err != nil {
+			return nil, err
+		}
+		return obj, nil
+	}
+}
