@@ -320,6 +320,17 @@ func (t *WorkTreeALB) addPath(
 	return true, errors
 }
 
+const (
+	kubeProxyHealthCheckEndpoint    = "/healthz"
+	kubeProxyExpectedHTTPStatusCode = "200"
+
+	healthCheckHealthyThreshold   int32 = 1
+	healthCheckInterval                 = "5s"
+	healthCheckIntervalJitter           = "1s"
+	healthCheckTimeout                  = "3s"
+	healthCheckUnhealthyThreshold int32 = 3
+)
+
 // buildTargetPool builds a target pool for the provided path.
 // It uses tree to validate the returned target pool against the existing state.
 //
@@ -419,16 +430,16 @@ func buildTargetPool( //nolint:gocyclo,funlen // TODO: Make function easier?!
 		targetPool.ActiveHealthCheck = &albsdk.ActiveHealthCheck{
 			AltPort: &service.Spec.HealthCheckNodePort,
 			HttpHealthChecks: &albsdk.HttpHealthChecks{
-				Path:       new("/healthz"),
-				OkStatuses: []string{"200"},
+				Path:       new(kubeProxyHealthCheckEndpoint),
+				OkStatuses: []string{kubeProxyExpectedHTTPStatusCode},
 			},
 			// If ActiveHealthCheck is set then all fields in it have to be set.
 			// The fields below are not strictly needed for externalTrafficPolicy=Local.
-			HealthyThreshold:   new(int32(1)),
-			Interval:           new("5s"),
-			IntervalJitter:     new("1s"),
-			Timeout:            new("3s"),
-			UnhealthyThreshold: new(int32(3)),
+			HealthyThreshold:   new(healthCheckHealthyThreshold),
+			Interval:           new(healthCheckInterval),
+			IntervalJitter:     new(healthCheckIntervalJitter),
+			Timeout:            new(healthCheckTimeout),
+			UnhealthyThreshold: new(healthCheckUnhealthyThreshold),
 		}
 	}
 
