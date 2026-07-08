@@ -8,7 +8,7 @@ VERSION 					?= $(shell git describe --dirty --tags --match='v*' 2>/dev/null || 
 export TAG                  := $(VERSION)
 IS_DEV                      ?= true
 ifeq ($(IS_DEV),true)
-REPO_POSTFIX                := dev
+REPO_POSTFIX                := -dev
 endif
 
 .PHONY: all
@@ -22,7 +22,7 @@ export PUSH ?= false
 
 .PHONY: images
 images: $(KO)
-	KO_DOCKER_REPO=$(REPO)/$(NAME)-$(REPO_POSTFIX) $(KO) build --push=$(PUSH) \
+	KO_DOCKER_REPO=$(REPO)/$(NAME)$(REPO_POSTFIX) $(KO) build --push=$(PUSH) \
 		--image-label org.opencontainers.image.source="https://github.com/stackitcloud/application-load-balancer-controller" \
 		--sbom none -t $(TAG) --bare \
 		--platform linux/amd64,linux/arm64 \
@@ -44,6 +44,10 @@ modules: ## Runs go mod to ensure modules are up to date.
 .PHONY: test
 test: ## Run tests.
 	./hack/test.sh ./cmd/... ./pkg/...
+
+.PHONY: test-integration
+test-integration: $(GINKGO) ## Run live integration tests against the current kubeconfig.
+	./hack/test-integration.sh
 
 .PHONY: test-cover
 test-cover: ## Run tests with coverage.

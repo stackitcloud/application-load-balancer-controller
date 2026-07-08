@@ -10,6 +10,8 @@ GOIMPORTS_REVISER_VERSION ?= v3.12.6
 GOLANGCI_LINT_VERSION ?= v2.12.2
 # renovate: datasource=github-releases depName=ko-build/ko
 KO_VERSION ?= v0.18.1
+# renovate: datasource=github-releases depName=onsi/ginkgo
+GINKGO_VERSION ?= v2.32.0
 
 
 # Tool targets should declare go.mod as a prerequisite, if the tool's version is managed via go modules. This causes
@@ -39,3 +41,7 @@ $(GOLANGCI_LINT): $(call tool_version_file,$(GOLANGCI_LINT),$(GOLANGCI_LINT_VERS
 KO := $(TOOLS_BIN_DIR)/ko
 $(KO): $(call tool_version_file,$(KO),$(KO_VERSION))
 	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install github.com/google/ko@$(KO_VERSION)
+
+GINKGO := $(TOOLS_BIN_DIR)/ginkgo
+$(GINKGO): $(call tool_version_file,$(GINKGO),$(GINKGO_VERSION))
+	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)

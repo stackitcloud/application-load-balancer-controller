@@ -5,3 +5,4 @@ The STACKIT Application Load Balancer Controller (ALBC) exposes HTTP/HTTPS appli
 This project is currently in alpha stage.
 
 - [User docs](./docs/user.md)
+- [Deployment docs](./deploy/README.md)
