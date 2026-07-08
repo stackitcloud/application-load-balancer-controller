@@ -9,6 +9,7 @@ import (
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress/spec"
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/stackit"
 	stackitconfig "github.com/stackitcloud/application-load-balancer-controller/pkg/stackit/config"
+	albsdk "github.com/stackitcloud/stackit-sdk-go/services/alb/v2api"
 	certsdk "github.com/stackitcloud/stackit-sdk-go/services/certificates/v2api"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -92,7 +93,7 @@ func (r *IngressClassReconciler) updateStatus( //nolint:gocyclo // TODO: Make th
 		return ctrl.Result{}, fmt.Errorf("failed to get load balancer: %w", err)
 	}
 
-	if alb.Status == nil || *alb.Status != stackit.LBStatusReady {
+	if alb.Status == nil || *alb.Status != albsdk.LOADBALANCERSTATUS_STATUS_READY {
 		// ALB is not yet ready, requeue
 		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 	}

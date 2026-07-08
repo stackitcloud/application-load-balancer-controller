@@ -46,16 +46,9 @@ type WorkTreeALB struct {
 	existingALB *albsdk.LoadBalancer
 }
 
-type protocol string
-
-const (
-	protocolHTTP  protocol = "PROTOCOL_HTTP"
-	protocolHTTPS protocol = "PROTOCOL_HTTPS"
-)
-
 type workTreeListener struct {
 	hosts    map[string]*workTreeHost
-	protocol protocol
+	protocol albsdk.ListenerProtocol
 }
 
 type pathWithType struct {
@@ -232,12 +225,12 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 				var httpAdded, httpsAdded bool
 				if !httpsOnly {
 					//nolint:gosec // httpPort is bounds-checked above
-					httpAdded, e = tree.addPath(ingressClass, ingress, rule, ruleIndex, path, pathIndex, uint16(httpPort), protocolHTTP)
+					httpAdded, e = tree.addPath(ingressClass, ingress, rule, ruleIndex, path, pathIndex, uint16(httpPort), albsdk.LISTENERPROTOCOL_PROTOCOL_HTTP)
 					errors = append(errors, e...)
 				}
 				if len(ingress.Spec.TLS) > 0 {
 					//nolint:gosec // httpsPort is bounds-checked above
-					httpsAdded, e = tree.addPath(ingressClass, ingress, rule, ruleIndex, path, pathIndex, uint16(httpsPort), protocolHTTPS)
+					httpsAdded, e = tree.addPath(ingressClass, ingress, rule, ruleIndex, path, pathIndex, uint16(httpsPort), albsdk.LISTENERPROTOCOL_PROTOCOL_HTTPS)
 					errors = append(errors, e...)
 				}
 
@@ -268,7 +261,7 @@ func addAccessControlToTree(tree *WorkTreeALB, ingressClass *networkingv1.Ingres
 func (t *WorkTreeALB) addPath(
 	ingressClass *networkingv1.IngressClass, ingress *networkingv1.Ingress,
 	rule networkingv1.IngressRule, ruleIndex int, path networkingv1.HTTPIngressPath, pathIndex int,
-	port uint16, protocol protocol,
+	port uint16, protocol albsdk.ListenerProtocol,
 ) (added bool, errors []ErrorEvent) {
 	pathAndType := pathWithType{pathType: ptr.Deref(path.PathType, networkingv1.PathTypeExact), path: path.Path}
 	ingressPathRef := ingressPathReference{namespace: ingress.Namespace, name: ingress.Name, uid: string(ingress.UID), ruleIndex: ruleIndex, pathIndex: pathIndex}
@@ -562,9 +555,9 @@ func (t *WorkTreeALB) ToCreatePayload( //nolint:gocyclo,funlen // Breaking up th
 		sortHosts(hosts)
 
 		var https *albsdk.ProtocolOptionsHTTPS
-		prot := protocolHTTP
-		if listener.protocol == protocolHTTPS {
-			prot = protocolHTTPS
+		prot := albsdk.LISTENERPROTOCOL_PROTOCOL_HTTP
+		if listener.protocol == albsdk.LISTENERPROTOCOL_PROTOCOL_HTTPS {
+			prot = albsdk.LISTENERPROTOCOL_PROTOCOL_HTTPS
 			https = &albsdk.ProtocolOptionsHTTPS{
 				CertificateConfig: &albsdk.CertificateConfig{
 					CertificateIds: []string{},
@@ -592,7 +585,7 @@ func (t *WorkTreeALB) ToCreatePayload( //nolint:gocyclo,funlen // Breaking up th
 		listeners = append(listeners, albsdk.Listener{
 			Name:          new(fmt.Sprintf("port-%d", port)),
 			WafConfigName: waf,
-			Protocol:      new(string(prot)),
+			Protocol:      new(prot),
 			Port:          new(int32(port)),
 			Http: &albsdk.ProtocolOptionsHTTP{
 				Hosts: hosts,
@@ -606,7 +599,7 @@ func (t *WorkTreeALB) ToCreatePayload( //nolint:gocyclo,funlen // Breaking up th
 		// The ALB doesn't allow zero listeners. To already create it we create an empty listener on port 80.
 		listeners = append(listeners, albsdk.Listener{
 			Name:     new(fmt.Sprintf("dummy-port-%d", 80)),
-			Protocol: new(string(protocolHTTP)),
+			Protocol: new(albsdk.LISTENERPROTOCOL_PROTOCOL_HTTP),
 			Port:     new(int32(80)),
 			Http: &albsdk.ProtocolOptionsHTTP{
 				Hosts: []albsdk.HostConfig{},
@@ -641,7 +634,7 @@ func (t *WorkTreeALB) ToCreatePayload( //nolint:gocyclo,funlen // Breaking up th
 		Networks: []albsdk.Network{
 			{
 				NetworkId: new(networkID),
-				Role:      new("ROLE_LISTENERS_AND_TARGETS"),
+				Role:      new(albsdk.NETWORKROLE_ROLE_LISTENERS_AND_TARGETS),
 			},
 		},
 		ExternalAddress: externalAddress,
@@ -668,7 +661,18 @@ func (t *WorkTreeALB) ToUpdatePayload(
 	region string,
 ) *albsdk.UpdateLoadBalancerPayload {
 	create := t.ToCreatePayload(certificateIDMap, networkID, region)
-	update := new(albsdk.UpdateLoadBalancerPayload(*create))
+	update := new(albsdk.UpdateLoadBalancerPayload{
+		DisableTargetSecurityGroupAssignment: create.DisableTargetSecurityGroupAssignment,
+		ExternalAddress:                      create.ExternalAddress,
+		Labels:                               create.Labels,
+		Listeners:                            create.Listeners,
+		Name:                                 create.Name,
+		Networks:                             create.Networks,
+		Options:                              create.Options,
+		PlanId:                               create.PlanId,
+		Region:                               create.Region,
+		TargetPools:                          create.TargetPools,
+	})
 	if t.existingALB.Options != nil && t.existingALB.Options.Observability != nil && t.existingALB.Options.Observability.Logs != nil {
 		update.Options.Observability = &albsdk.LoadbalancerOptionObservability{
 			Logs: t.existingALB.Options.Observability.Logs,

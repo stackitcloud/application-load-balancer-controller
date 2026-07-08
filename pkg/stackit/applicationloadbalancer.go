@@ -9,17 +9,6 @@ import (
 	albsdk "github.com/stackitcloud/stackit-sdk-go/services/alb/v2api"
 )
 
-type ProjectStatus string
-
-const (
-	LBStatusReady       = "STATUS_READY"
-	LBStatusTerminating = "STATUS_TERMINATING"
-	LBStatusError       = "STATUS_ERROR"
-
-	ProtocolHTTP  = "PROTOCOL_HTTP"
-	ProtocolHTTPS = "PROTOCOL_HTTPS"
-)
-
 type ApplicationLoadBalancerClient interface {
 	GetLoadBalancer(ctx context.Context, projectID, region, name string) (*albsdk.LoadBalancer, error)
 	DeleteLoadBalancer(ctx context.Context, projectID, region, name string) error

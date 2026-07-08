@@ -139,7 +139,18 @@ func (a *ALB) CreateLoadBalancer(
 	if _, exists := a.loadBalancers[key]; exists {
 		return nil, fmt.Errorf("load balancer %q already exists", *payload.Name)
 	}
-	lb := albsdk.LoadBalancer(*payload)
+	lb := albsdk.LoadBalancer{
+		DisableTargetSecurityGroupAssignment: payload.DisableTargetSecurityGroupAssignment,
+		ExternalAddress:                      payload.ExternalAddress,
+		Labels:                               payload.Labels,
+		Listeners:                            payload.Listeners,
+		Name:                                 payload.Name,
+		Networks:                             payload.Networks,
+		Options:                              payload.Options,
+		PlanId:                               payload.PlanId,
+		Region:                               payload.Region,
+		TargetPools:                          payload.TargetPools,
+	}
 	a.materialize(&lb)
 	a.loadBalancers[key] = &lb
 	cp := lb
@@ -166,7 +177,19 @@ func (a *ALB) UpdateLoadBalancer(
 	if payload.Version != nil && existing.Version != nil && *payload.Version != *existing.Version {
 		return nil, fmt.Errorf("version conflict: current %q, got %q", *existing.Version, *payload.Version)
 	}
-	lb := albsdk.LoadBalancer(*payload)
+	lb := albsdk.LoadBalancer{
+		DisableTargetSecurityGroupAssignment: payload.DisableTargetSecurityGroupAssignment,
+		ExternalAddress:                      payload.ExternalAddress,
+		Labels:                               payload.Labels,
+		Listeners:                            payload.Listeners,
+		Name:                                 payload.Name,
+		Networks:                             payload.Networks,
+		Options:                              payload.Options,
+		PlanId:                               payload.PlanId,
+		Region:                               payload.Region,
+		TargetPools:                          payload.TargetPools,
+		Version:                              payload.Version,
+	}
 	a.materialize(&lb)
 	a.loadBalancers[key] = &lb
 	cp := lb
@@ -181,8 +204,7 @@ func (a *ALB) materialize(lb *albsdk.LoadBalancer) {
 	} else {
 		lb.Version = new(*lb.Version + "+1")
 	}
-	status := stackit.LBStatusReady
-	lb.Status = &status
+	lb.Status = new(albsdk.LOADBALANCERSTATUS_STATUS_READY)
 	if lb.Options != nil && lb.Options.PrivateNetworkOnly != nil && *lb.Options.PrivateNetworkOnly {
 		if lb.PrivateAddress == nil {
 			addr := a.PrivateAddress
