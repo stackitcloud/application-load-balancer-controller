@@ -25,12 +25,6 @@ type ApplicationLoadBalancerClient interface {
 	DeleteLoadBalancer(ctx context.Context, projectID, region, name string) error
 	CreateLoadBalancer(ctx context.Context, projectID, region string, albsdk *albsdk.CreateLoadBalancerPayload) (*albsdk.LoadBalancer, error)
 	UpdateLoadBalancer(ctx context.Context, projectID, region, name string, update *albsdk.UpdateLoadBalancerPayload) (*albsdk.LoadBalancer, error)
-	UpdateTargetPool(ctx context.Context, projectID, region, name string, targetPoolName string, payload albsdk.UpdateTargetPoolPayload) error
-	CreateCredentials(ctx context.Context, projectID, region string, payload albsdk.CreateCredentialsPayload) (*albsdk.CreateCredentialsResponse, error)
-	ListCredentials(ctx context.Context, projectID, region string) (*albsdk.ListCredentialsResponse, error)
-	GetCredentials(ctx context.Context, projectID, region, credentialRef string) (*albsdk.GetCredentialsResponse, error)
-	UpdateCredentials(ctx context.Context, projectID, region, credentialRef string, payload albsdk.UpdateCredentialsPayload) error
-	DeleteCredentials(ctx context.Context, projectID, region, credentialRef string) error
 }
 
 type applicationLoadBalancerClient struct {
@@ -72,46 +66,4 @@ func (cl applicationLoadBalancerClient) UpdateLoadBalancer(ctx context.Context, 
 	*albsdk.LoadBalancer, error,
 ) {
 	return cl.client.DefaultAPI.UpdateLoadBalancer(ctx, projectID, region, name).UpdateLoadBalancerPayload(*update).Execute()
-}
-
-func (cl applicationLoadBalancerClient) UpdateTargetPool(
-	ctx context.Context, projectID, region, name, targetPoolName string, payload albsdk.UpdateTargetPoolPayload,
-) error {
-	_, err := cl.client.DefaultAPI.UpdateTargetPool(ctx, projectID, region, name, targetPoolName).UpdateTargetPoolPayload(payload).Execute()
-	return err
-}
-
-func (cl applicationLoadBalancerClient) CreateCredentials(
-	ctx context.Context,
-	projectID string,
-	region string,
-	payload albsdk.CreateCredentialsPayload,
-) (*albsdk.CreateCredentialsResponse, error) {
-	return cl.client.DefaultAPI.CreateCredentials(ctx, projectID, region).CreateCredentialsPayload(payload).XRequestID(uuid.NewString()).Execute()
-}
-
-func (cl applicationLoadBalancerClient) ListCredentials(ctx context.Context, projectID, region string) (*albsdk.ListCredentialsResponse, error) {
-	return cl.client.DefaultAPI.ListCredentials(ctx, projectID, region).Execute()
-}
-
-func (cl applicationLoadBalancerClient) GetCredentials(ctx context.Context, projectID, region, credentialsRef string) (*albsdk.GetCredentialsResponse, error) {
-	return cl.client.DefaultAPI.GetCredentials(ctx, projectID, region, credentialsRef).Execute()
-}
-
-func (cl applicationLoadBalancerClient) UpdateCredentials(
-	ctx context.Context, projectID, region, credentialsRef string, payload albsdk.UpdateCredentialsPayload,
-) error {
-	_, err := cl.client.DefaultAPI.UpdateCredentials(ctx, projectID, region, credentialsRef).UpdateCredentialsPayload(payload).Execute()
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (cl applicationLoadBalancerClient) DeleteCredentials(ctx context.Context, projectID, region, credentialsRef string) error {
-	_, err := cl.client.DefaultAPI.DeleteCredentials(ctx, projectID, region, credentialsRef).Execute()
-	if err != nil {
-		return err
-	}
-	return nil
 }

@@ -173,12 +173,6 @@ func (a *ALB) UpdateLoadBalancer(
 	return &cp, nil
 }
 
-func (a *ALB) UpdateTargetPool(
-	_ context.Context, _, _, _, _ string, _ albsdk.UpdateTargetPoolPayload,
-) error {
-	panic("not implemented")
-}
-
 // materialize populates fields that the real API assigns server-side (Version,
 // Status, external/private address).
 func (a *ALB) materialize(lb *albsdk.LoadBalancer) {
@@ -202,28 +196,4 @@ func (a *ALB) materialize(lb *albsdk.LoadBalancer) {
 
 func (a *ALB) record(method string, args ...any) {
 	a.calls = append(a.calls, ALBCall{Method: method, Args: args})
-}
-
-func (a *ALB) CreateCredentials(
-	_ context.Context, _, _ string, _ albsdk.CreateCredentialsPayload,
-) (*albsdk.CreateCredentialsResponse, error) {
-	panic("not implemented")
-}
-
-func (a *ALB) ListCredentials(_ context.Context, _, _ string) (*albsdk.ListCredentialsResponse, error) {
-	panic("not implemented")
-}
-
-func (a *ALB) GetCredentials(_ context.Context, _, _, _ string) (*albsdk.GetCredentialsResponse, error) {
-	panic("not implemented")
-}
-
-func (a *ALB) UpdateCredentials(
-	_ context.Context, _, _, _ string, _ albsdk.UpdateCredentialsPayload,
-) error {
-	panic("not implemented")
-}
-
-func (a *ALB) DeleteCredentials(_ context.Context, _, _, _ string) error {
-	panic("not implemented")
 }
