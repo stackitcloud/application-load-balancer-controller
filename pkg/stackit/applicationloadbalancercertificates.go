@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	certsdk "github.com/stackitcloud/stackit-sdk-go/services/certificates/v2api"
+	"k8s.io/utils/ptr"
 )
 
 type CertificatesClient interface {
@@ -12,7 +13,7 @@ type CertificatesClient interface {
 	GetCertificate(ctx context.Context, projectID, region, name string) (*certsdk.GetCertificateResponse, error)
 	DeleteCertificate(ctx context.Context, projectID, region, name string) error
 	CreateCertificate(ctx context.Context, projectID, region string, certificate *certsdk.CreateCertificatePayload) (*certsdk.GetCertificateResponse, error)
-	ListCertificate(ctx context.Context, projectID, region string) (*certsdk.ListCertificatesResponse, error)
+	ListCertificate(ctx context.Context, projectID, region string) ([]certsdk.GetCertificateResponse, error)
 }
 
 type certClient struct {
@@ -48,7 +49,24 @@ func (cl certClient) CreateCertificate(
 	return cert, err
 }
 
-func (cl certClient) ListCertificate(ctx context.Context, projectID, region string) (*certsdk.ListCertificatesResponse, error) {
-	certs, err := cl.client.DefaultAPI.ListCertificates(ctx, projectID, region).Execute()
-	return certs, err
+func (cl certClient) ListCertificate(ctx context.Context, projectID, region string) ([]certsdk.GetCertificateResponse, error) {
+	certs := []certsdk.GetCertificateResponse{}
+	var nextPage string
+	for {
+		req := cl.client.DefaultAPI.ListCertificates(ctx, projectID, region)
+		if nextPage != "" {
+			req = req.PageId(nextPage)
+		}
+		page, err := req.Execute()
+		if err != nil {
+			return nil, err
+		}
+		certs = append(certs, page.Items...)
+		if ptr.Deref(page.NextPageId, "") != "" {
+			nextPage = *page.NextPageId
+		} else {
+			break
+		}
+	}
+	return certs, nil
 }

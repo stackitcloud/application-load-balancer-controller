@@ -156,7 +156,7 @@ func (c *Certs) CreateCertificate(
 	return &cp, nil
 }
 
-func (c *Certs) ListCertificate(_ context.Context, projectID, region string) (*certsdk.ListCertificatesResponse, error) {
+func (c *Certs) ListCertificate(_ context.Context, projectID, region string) ([]certsdk.GetCertificateResponse, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.record("ListCertificate", projectID, region)
@@ -167,7 +167,7 @@ func (c *Certs) ListCertificate(_ context.Context, projectID, region string) (*c
 		}
 		items = append(items, *v)
 	}
-	return &certsdk.ListCertificatesResponse{Items: items}, nil
+	return items, nil
 }
 
 func (c *Certs) record(method string, args ...any) {

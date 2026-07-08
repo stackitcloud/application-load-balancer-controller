@@ -219,14 +219,13 @@ func (r *IngressClassReconciler) getTLSSecretsFromIngresses(ctx context.Context,
 func (r *IngressClassReconciler) getCertificatesForIngressClass(
 	ctx context.Context, ingressClass *networkingv1.IngressClass,
 ) ([]certsdk.GetCertificateResponse, error) {
-	// TODO: deal with paging
 	projectCertificates, err := r.CertificateClient.ListCertificate(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list certificates: %w", err)
 	}
 
 	ingressClassCertificates := []certsdk.GetCertificateResponse{}
-	for _, cert := range projectCertificates.Items {
+	for _, cert := range projectCertificates {
 		if cert.Labels != nil && (*cert.Labels)[spec.LabelIngressClassUID] == string(ingressClass.UID) {
 			ingressClassCertificates = append(ingressClassCertificates, cert)
 		}
