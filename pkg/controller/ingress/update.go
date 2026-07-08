@@ -3,6 +3,7 @@ package ingress
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress/spec"
@@ -234,10 +235,18 @@ func (r *IngressClassReconciler) getCertificatesForIngressClass(
 	return ingressClassCertificates, nil
 }
 
+// updateNeeded return true if fields have change that requires the ALB to be updated.
+// The order of slices matter, i.e. swapping two entries makes this function return true.
 func updateNeeded(alb *albsdk.LoadBalancer, albPayload *albsdk.UpdateLoadBalancerPayload) bool {
 	return listenersChanged(alb.Listeners, albPayload.Listeners) ||
 		targetPoolsChanged(alb.TargetPools, albPayload.TargetPools) ||
-		optionsChanged(alb.Options, albPayload.Options)
+		optionsChanged(alb.Options, albPayload.Options) ||
+		labelsChanged(alb.Labels, albPayload.Labels) ||
+		ptr.Deref(alb.PlanId, "") != ptr.Deref(albPayload.PlanId, "")
+}
+
+func labelsChanged(c, d *map[string]string) bool {
+	return !maps.Equal(ptr.Deref(c, map[string]string{}), ptr.Deref(d, map[string]string{}))
 }
 
 func listenersChanged(current, desired []albsdk.Listener) bool {
@@ -247,7 +256,8 @@ func listenersChanged(current, desired []albsdk.Listener) bool {
 	for i := range current {
 		c, d := current[i], desired[i]
 
-		if ptr.Deref(c.Protocol, "") != ptr.Deref(d.Protocol, "") ||
+		if ptr.Deref(c.Name, "") != ptr.Deref(d.Name, "") ||
+			ptr.Deref(c.Protocol, "") != ptr.Deref(d.Protocol, "") ||
 			ptr.Deref(c.Port, 0) != ptr.Deref(d.Port, 0) ||
 			ptr.Deref(c.WafConfigName, "") != ptr.Deref(d.WafConfigName, "") {
 			return true
@@ -305,7 +315,13 @@ func httpsOptionsChanged(c, d *albsdk.ProtocolOptionsHTTPS) bool {
 	if c == nil || d == nil {
 		return true
 	}
-	return len(c.CertificateConfig.CertificateIds) != len(d.CertificateConfig.CertificateIds)
+	if c.CertificateConfig == nil && d.CertificateConfig == nil {
+		return false
+	}
+	if c.CertificateConfig == nil || d.CertificateConfig == nil {
+		return true
+	}
+	return !slices.Equal(c.CertificateConfig.CertificateIds, d.CertificateConfig.CertificateIds)
 }
 
 func targetPoolsChanged(current, desired []albsdk.TargetPool) bool {
@@ -317,21 +333,53 @@ func targetPoolsChanged(current, desired []albsdk.TargetPool) bool {
 
 		if ptr.Deref(c.Name, "") != ptr.Deref(d.Name, "") ||
 			ptr.Deref(c.TargetPort, 0) != ptr.Deref(d.TargetPort, 0) ||
-			len(c.Targets) != len(d.Targets) {
+			targetsChanged(c.Targets, d.Targets) {
 			return true
 		}
 
-		if (c.TlsConfig == nil) != (d.TlsConfig == nil) {
+		if tlsChanged(c.TlsConfig, d.TlsConfig) {
 			return true
 		}
-		if c.TlsConfig != nil && d.TlsConfig != nil {
-			if ptr.Deref(c.TlsConfig.SkipCertificateValidation, false) != ptr.Deref(d.TlsConfig.SkipCertificateValidation, false) ||
-				ptr.Deref(c.TlsConfig.CustomCa, "") != ptr.Deref(d.TlsConfig.CustomCa, "") {
-				return true
-			}
+
+		cHealthCheck := ptr.Deref(c.ActiveHealthCheck, albsdk.ActiveHealthCheck{})
+		dHealthCheck := ptr.Deref(d.ActiveHealthCheck, albsdk.ActiveHealthCheck{})
+		if ptr.Deref(cHealthCheck.AltPort, 0) != ptr.Deref(dHealthCheck.AltPort, 0) ||
+			ptr.Deref(cHealthCheck.HealthyThreshold, 0) != ptr.Deref(dHealthCheck.HealthyThreshold, 0) ||
+			ptr.Deref(cHealthCheck.Interval, "") != ptr.Deref(dHealthCheck.Interval, "") ||
+			ptr.Deref(cHealthCheck.IntervalJitter, "") != ptr.Deref(dHealthCheck.IntervalJitter, "") ||
+			ptr.Deref(cHealthCheck.Timeout, "") != ptr.Deref(dHealthCheck.Timeout, "") ||
+			ptr.Deref(cHealthCheck.UnhealthyThreshold, 0) != ptr.Deref(dHealthCheck.UnhealthyThreshold, 0) {
+			return true
+		}
+
+		cHTTPHealth := ptr.Deref(cHealthCheck.HttpHealthChecks, albsdk.HttpHealthChecks{})
+		dHTTPHealth := ptr.Deref(dHealthCheck.HttpHealthChecks, albsdk.HttpHealthChecks{})
+		if ptr.Deref(cHTTPHealth.Path, "") != ptr.Deref(dHTTPHealth.Path, "") ||
+			!slices.Equal(cHTTPHealth.OkStatuses, dHTTPHealth.OkStatuses) {
+			return true
+		}
+		if tlsChanged(cHTTPHealth.Tls, dHTTPHealth.Tls) {
+			return true
 		}
 	}
 	return false
+}
+
+func tlsChanged(c, d *albsdk.TlsConfig) bool {
+	cTLS := ptr.Deref(c, albsdk.TlsConfig{})
+	dTLS := ptr.Deref(d, albsdk.TlsConfig{})
+	if ptr.Deref(cTLS.Enabled, false) != ptr.Deref(dTLS.Enabled, false) ||
+		ptr.Deref(cTLS.SkipCertificateValidation, false) != ptr.Deref(dTLS.SkipCertificateValidation, false) ||
+		ptr.Deref(cTLS.CustomCa, "") != ptr.Deref(dTLS.CustomCa, "") {
+		return true
+	}
+	return false
+}
+
+func targetsChanged(c, d []albsdk.Target) bool {
+	return !slices.EqualFunc(c, d, func(a, b albsdk.Target) bool {
+		return ptr.Deref(a.Ip, "") == ptr.Deref(b.Ip, "") && ptr.Deref(a.DisplayName, "") == ptr.Deref(b.DisplayName, "")
+	})
 }
 
 func optionsChanged(current, desired *albsdk.LoadBalancerOptions) bool {
