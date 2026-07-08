@@ -241,12 +241,12 @@ func updateNeeded(alb *albsdk.LoadBalancer, albPayload *albsdk.UpdateLoadBalance
 	return listenersChanged(alb.Listeners, albPayload.Listeners) ||
 		targetPoolsChanged(alb.TargetPools, albPayload.TargetPools) ||
 		optionsChanged(alb.Options, albPayload.Options) ||
-		labelsChanged(alb.Labels, albPayload.Labels) ||
+		labelsChanged(ptr.Deref(alb.Labels, map[string]string{}), ptr.Deref(albPayload.Labels, map[string]string{})) ||
 		ptr.Deref(alb.PlanId, "") != ptr.Deref(albPayload.PlanId, "")
 }
 
-func labelsChanged(c, d *map[string]string) bool {
-	return !maps.Equal(ptr.Deref(c, map[string]string{}), ptr.Deref(d, map[string]string{}))
+func labelsChanged(c, d map[string]string) bool {
+	return !maps.Equal(c, d)
 }
 
 func listenersChanged(current, desired []albsdk.Listener) bool {
@@ -341,24 +341,7 @@ func targetPoolsChanged(current, desired []albsdk.TargetPool) bool {
 			return true
 		}
 
-		cHealthCheck := ptr.Deref(c.ActiveHealthCheck, albsdk.ActiveHealthCheck{})
-		dHealthCheck := ptr.Deref(d.ActiveHealthCheck, albsdk.ActiveHealthCheck{})
-		if ptr.Deref(cHealthCheck.AltPort, 0) != ptr.Deref(dHealthCheck.AltPort, 0) ||
-			ptr.Deref(cHealthCheck.HealthyThreshold, 0) != ptr.Deref(dHealthCheck.HealthyThreshold, 0) ||
-			ptr.Deref(cHealthCheck.Interval, "") != ptr.Deref(dHealthCheck.Interval, "") ||
-			ptr.Deref(cHealthCheck.IntervalJitter, "") != ptr.Deref(dHealthCheck.IntervalJitter, "") ||
-			ptr.Deref(cHealthCheck.Timeout, "") != ptr.Deref(dHealthCheck.Timeout, "") ||
-			ptr.Deref(cHealthCheck.UnhealthyThreshold, 0) != ptr.Deref(dHealthCheck.UnhealthyThreshold, 0) {
-			return true
-		}
-
-		cHTTPHealth := ptr.Deref(cHealthCheck.HttpHealthChecks, albsdk.HttpHealthChecks{})
-		dHTTPHealth := ptr.Deref(dHealthCheck.HttpHealthChecks, albsdk.HttpHealthChecks{})
-		if ptr.Deref(cHTTPHealth.Path, "") != ptr.Deref(dHTTPHealth.Path, "") ||
-			!slices.Equal(cHTTPHealth.OkStatuses, dHTTPHealth.OkStatuses) {
-			return true
-		}
-		if tlsChanged(cHTTPHealth.Tls, dHTTPHealth.Tls) {
+		if healthCheckChanged(c.ActiveHealthCheck, d.ActiveHealthCheck) {
 			return true
 		}
 	}
@@ -373,6 +356,33 @@ func tlsChanged(c, d *albsdk.TlsConfig) bool {
 		ptr.Deref(cTLS.CustomCa, "") != ptr.Deref(dTLS.CustomCa, "") {
 		return true
 	}
+	return false
+}
+
+func healthCheckChanged(c, d *albsdk.ActiveHealthCheck) bool {
+	cHealthCheck := ptr.Deref(c, albsdk.ActiveHealthCheck{})
+	dHealthCheck := ptr.Deref(d, albsdk.ActiveHealthCheck{})
+
+	if ptr.Deref(cHealthCheck.AltPort, 0) != ptr.Deref(dHealthCheck.AltPort, 0) ||
+		ptr.Deref(cHealthCheck.HealthyThreshold, 0) != ptr.Deref(dHealthCheck.HealthyThreshold, 0) ||
+		ptr.Deref(cHealthCheck.Interval, "") != ptr.Deref(dHealthCheck.Interval, "") ||
+		ptr.Deref(cHealthCheck.IntervalJitter, "") != ptr.Deref(dHealthCheck.IntervalJitter, "") ||
+		ptr.Deref(cHealthCheck.Timeout, "") != ptr.Deref(dHealthCheck.Timeout, "") ||
+		ptr.Deref(cHealthCheck.UnhealthyThreshold, 0) != ptr.Deref(dHealthCheck.UnhealthyThreshold, 0) {
+		return true
+	}
+
+	cHTTPHealth := ptr.Deref(cHealthCheck.HttpHealthChecks, albsdk.HttpHealthChecks{})
+	dHTTPHealth := ptr.Deref(dHealthCheck.HttpHealthChecks, albsdk.HttpHealthChecks{})
+	if ptr.Deref(cHTTPHealth.Path, "") != ptr.Deref(dHTTPHealth.Path, "") ||
+		!slices.Equal(cHTTPHealth.OkStatuses, dHTTPHealth.OkStatuses) {
+		return true
+	}
+
+	if tlsChanged(cHTTPHealth.Tls, dHTTPHealth.Tls) {
+		return true
+	}
+
 	return false
 }
 
