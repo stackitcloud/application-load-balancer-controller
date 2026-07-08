@@ -865,4 +865,77 @@ var _ = Describe("WorkTreeALB", func() {
 			}),
 		))
 	})
+
+	It("should error if HTTPS port is out of range", func() {
+		tree, errs := BuildTree(
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationHTTPSPort: "-3",
+					},
+				},
+			},
+			[]networkingv1.Ingress{
+				Ingress(corev1.NamespaceDefault, "ingress-1", WithTLSSecret("my-cert"), WithRule("my-host.local",
+					WithPath("/", new(networkingv1.PathTypePrefix), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
+				)),
+			},
+			[]corev1.Secret{
+				{
+					ObjectMeta: metav1.ObjectMeta{Namespace: corev1.NamespaceDefault, Name: "my-cert"},
+					Type:       corev1.SecretTypeTLS,
+					Data: map[string][]byte{
+						corev1.TLSCertKey:       []byte(testdata.FixtureTLS1PublicKey),
+						corev1.TLSPrivateKeyKey: []byte(testdata.FixtureTLS1PrivateKey),
+					},
+				},
+			},
+			[]corev1.Service{
+				Service(corev1.NamespaceDefault, "my-service",
+					WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 80, 30000, corev1.ProtocolTCP),
+				),
+			}, nil, nil,
+		)
+
+		Expect(errs).To(ConsistOf(
+			MatchAllFields(Fields{
+				"Ingress":     testutil.HaveName("ingress-1"),
+				"Description": Equal("HTTPS port is out of range."),
+				"FieldPath":   BeNil(),
+			}),
+		))
+		Expect(tree.targetPools).To(BeEmpty())
+	})
+
+	It("should error if HTTP port is out of range", func() {
+		tree, errs := BuildTree(
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationHTTPPort: "70000",
+					},
+				},
+			},
+			[]networkingv1.Ingress{
+				Ingress(corev1.NamespaceDefault, "ingress-1", WithRule("my-host.local",
+					WithPath("/", new(networkingv1.PathTypePrefix), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
+				)),
+			},
+			nil,
+			[]corev1.Service{
+				Service(corev1.NamespaceDefault, "my-service",
+					WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 80, 30000, corev1.ProtocolTCP),
+				),
+			}, nil, nil,
+		)
+
+		Expect(errs).To(ConsistOf(
+			MatchAllFields(Fields{
+				"Ingress":     testutil.HaveName("ingress-1"),
+				"Description": Equal("HTTP port is out of range."),
+				"FieldPath":   BeNil(),
+			}),
+		))
+		Expect(tree.targetPools).To(BeEmpty())
+	})
 })
