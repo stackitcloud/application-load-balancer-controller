@@ -13,7 +13,7 @@ import (
 
 func DeleteAndWaitForKubernetesResource(ctx context.Context, cl client.Client, obj client.Object) {
 	GinkgoHelper()
-	Expect(cl.Delete(ctx, obj)).To(Succeed())
+	Expect(cl.Delete(ctx, obj)).To(WithTransform(client.IgnoreNotFound, Succeed()))
 	Eventually(func(g Gomega, ctx context.Context) {
 		g.Expect(cl.Get(ctx, client.ObjectKeyFromObject(obj), obj)).Should(
 			WithTransform(apierrors.IsNotFound, BeTrue()),
@@ -55,4 +55,17 @@ func KubernetesResource(cl client.Client, obj client.Object) func(ctx context.Co
 		}
 		return obj, nil
 	}
+}
+
+// WaitUntilFinalizerAttached asserts that obj eventually has the finalizer.
+// obj is updated in the process.
+func WaitUntilFinalizerAttached(ctx context.Context, cl client.Client, obj client.Object, finalizer string) {
+	GinkgoHelper()
+
+	key := client.ObjectKeyFromObject(obj)
+	Eventually(ctx, func(g Gomega, ctx context.Context) {
+		err := cl.Get(ctx, key, obj)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(obj.GetFinalizers()).To(ContainElement(finalizer))
+	}).Should(Succeed())
 }

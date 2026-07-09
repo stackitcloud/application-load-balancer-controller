@@ -42,7 +42,8 @@ var _ = Describe("IngressClassController", func() {
 		albFake  *fake.ALB
 		certFake *fake.Certs
 
-		node corev1.Node
+		node1 corev1.Node
+		node2 corev1.Node
 
 		mgrContext        context.Context
 		mgrCancel         context.CancelFunc
@@ -71,13 +72,20 @@ var _ = Describe("IngressClassController", func() {
 			Expect(k8sClient.Delete(ctx, namespace)).To(Succeed())
 		})
 
-		node = corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{Name: "test-node"},
+		node1 = corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{Name: "node-1"},
 			Status: corev1.NodeStatus{
-				Addresses: []corev1.NodeAddress{{Type: corev1.NodeInternalIP, Address: "10.10.10.10"}},
+				Addresses: []corev1.NodeAddress{{Type: corev1.NodeInternalIP, Address: "10.0.0.1"}},
 			},
 		}
-		testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, &node)
+		testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, &node1)
+		node2 = corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{Name: "node-2"},
+			Status: corev1.NodeStatus{
+				Addresses: []corev1.NodeAddress{{Type: corev1.NodeInternalIP, Address: "10.0.0.2"}},
+			},
+		}
+		testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, &node2)
 
 		mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 			Scheme: scheme.Scheme,
@@ -153,7 +161,7 @@ var _ = Describe("IngressClassController", func() {
 			Expect(albFake.CallsOf("DeleteLoadBalancer")).To(HaveLen(1))
 		})
 
-		WaitUntilFinalizerAttached(ctx, k8sClient, ingressClass)
+		testutil.WaitUntilFinalizerAttached(ctx, k8sClient, ingressClass, finalizerName)
 
 		Eventually(func() *albsdk.LoadBalancer {
 			return albFake.LoadBalancer(projectID, region, spec.LoadBalancerName(ingressClass))
@@ -303,7 +311,94 @@ var _ = Describe("IngressClassController", func() {
 			})))
 		})
 
-		// TODO: Test changes to nodes
+		// This context is useful for any test case that require at least one target.
+		Context("with HTTP ingress", func() {
+			var (
+				service corev1.Service
+				ingress networkingv1.Ingress
+			)
+
+			BeforeEach(func(ctx context.Context) {
+				service = Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("http", 80, 30000, corev1.ProtocolTCP))
+				testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, &service)
+				ingress = Ingress(corev1.NamespaceDefault, "ingress-1", WithIngressClass(ingressClass.Name),
+					WithRule("host1.local", WithPath("/", new(networkingv1.PathTypePrefix), service.Name, networkingv1.ServiceBackendPort{Number: 80})),
+				)
+				testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, &ingress)
+				Eventually(ctx, func(g Gomega, ctx context.Context) {
+					lb := albFake.LoadBalancer(projectID, region, spec.LoadBalancerName(ingressClass))
+					g.Expect(lb).NotTo(BeNil())
+					g.Expect(lb.TargetPools).To(HaveLen(1))
+				}).Should(Succeed())
+			})
+
+			It("should remove a node that is tainted to be deleted", func(ctx context.Context) {
+				node2.Spec.Taints = append(node2.Spec.Taints, corev1.Taint{
+					Key:    spec.TaintToBeDeleted,
+					Value:  "true",
+					Effect: corev1.TaintEffectNoSchedule,
+				})
+				Expect(k8sClient.Update(ctx, &node2)).To(Succeed())
+
+				Eventually(ctx, func(g Gomega, ctx context.Context) {
+					lb := albFake.LoadBalancer(projectID, region, spec.LoadBalancerName(ingressClass))
+					g.Expect(lb).NotTo(BeNil())
+					g.Expect(lb.TargetPools).To(HaveLen(1))
+					g.Expect(lb.TargetPools[0].Targets).To(HaveLen(1))
+					g.Expect(lb.TargetPools[0].Targets[0].DisplayName).To(HaveValue(Equal("node-1")))
+				}).Should(Succeed())
+			})
+
+			It("should remove a node that has terminating condition", func(ctx context.Context) {
+				node2.Status.Conditions = append(node2.Status.Conditions, corev1.NodeCondition{
+					Type:   spec.ConditionNodeTermination,
+					Status: corev1.ConditionTrue,
+				})
+				Expect(k8sClient.Status().Update(ctx, &node2)).To(Succeed())
+
+				Eventually(ctx, func(g Gomega, ctx context.Context) {
+					lb := albFake.LoadBalancer(projectID, region, spec.LoadBalancerName(ingressClass))
+					g.Expect(lb).NotTo(BeNil())
+					g.Expect(lb.TargetPools).To(HaveLen(1))
+					g.Expect(lb.TargetPools[0].Targets).To(HaveLen(1))
+					g.Expect(lb.TargetPools[0].Targets[0].DisplayName).To(HaveValue(Equal("node-1")))
+				}).Should(Succeed())
+			})
+
+			It("should remove a node that is deleted", func(ctx context.Context) {
+				Expect(k8sClient.Delete(ctx, &node2)).To(Succeed())
+
+				Eventually(ctx, func(g Gomega, ctx context.Context) {
+					lb := albFake.LoadBalancer(projectID, region, spec.LoadBalancerName(ingressClass))
+					g.Expect(lb).NotTo(BeNil())
+					g.Expect(lb.TargetPools).To(HaveLen(1))
+					g.Expect(lb.TargetPools[0].Targets).To(HaveLen(1))
+					g.Expect(lb.TargetPools[0].Targets[0].DisplayName).To(HaveValue(Equal("node-1")))
+				}).Should(Succeed())
+			})
+
+			It("should add a node that which address is added after creation", func(ctx context.Context) {
+				node3 := corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{Name: "node-3"},
+				}
+				Expect(k8sClient.Create(ctx, &node3)).To(Succeed())
+				node3.Status = corev1.NodeStatus{
+					Addresses: []corev1.NodeAddress{{Type: corev1.NodeInternalIP, Address: "10.0.0.3"}},
+				}
+				Expect(k8sClient.Status().Update(ctx, &node3)).To(Succeed())
+
+				Eventually(ctx, func(g Gomega, ctx context.Context) {
+					lb := albFake.LoadBalancer(projectID, region, spec.LoadBalancerName(ingressClass))
+					g.Expect(lb).NotTo(BeNil())
+					g.Expect(lb.TargetPools).To(HaveLen(1))
+					g.Expect(lb.TargetPools[0].Targets).To(HaveLen(3))
+					g.Expect(lb.TargetPools[0].Targets).To(ContainElement(MatchFields(IgnoreExtras, Fields{
+						"DisplayName": HaveValue(Equal("node-3")),
+						"Ip":          HaveValue(Equal("10.0.0.3")),
+					})))
+				}).Should(Succeed())
+			})
+		})
 	})
 
 	It("should set the private IP of the ALB in the status of each ingress for a private LB", func(ctx context.Context) {
@@ -355,15 +450,3 @@ var _ = Describe("IngressClassController", func() {
 		})))
 	})
 })
-
-// WaitUntilFinalizerAttached blocks until the controller successfully injects our tracking string
-func WaitUntilFinalizerAttached(ctx context.Context, cl client.Client, ic *networkingv1.IngressClass) {
-	GinkgoHelper() // Tells Ginkgo to report failures on the line that calls this function, not here!
-
-	reconciledIngressClass := &networkingv1.IngressClass{}
-	Eventually(func(g Gomega) {
-		err := cl.Get(ctx, client.ObjectKeyFromObject(ic), reconciledIngressClass)
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(reconciledIngressClass.Finalizers).To(ContainElement(finalizerName))
-	}, "5s", "200ms").Should(Succeed())
-}

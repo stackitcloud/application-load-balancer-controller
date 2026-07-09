@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress/spec"
+	"github.com/stackitcloud/application-load-balancer-controller/pkg/kubeutil"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -200,8 +202,9 @@ func nodePredicate() predicate.Predicate {
 				return false
 			}
 
-			// TODO: include more updates such as annotations
-			return !reflect.DeepEqual(oldNode.Status.Addresses, newNode.Status.Addresses)
+			return !reflect.DeepEqual(oldNode.Status.Addresses, newNode.Status.Addresses) ||
+				!reflect.DeepEqual(kubeutil.GetTaint(oldNode, spec.TaintToBeDeleted), kubeutil.GetTaint(newNode, spec.TaintToBeDeleted)) ||
+				!reflect.DeepEqual(kubeutil.GetNodeCondition(oldNode, spec.ConditionNodeTermination), kubeutil.GetNodeCondition(newNode, spec.ConditionNodeTermination))
 		},
 		DeleteFunc: func(_ event.DeleteEvent) bool {
 			return true
