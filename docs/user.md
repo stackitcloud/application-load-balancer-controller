@@ -169,17 +169,20 @@ spec:
 
 ### Limits
 
-The following limitations are imposed directly by the STACKIT ALB API (not the controller itself):
+The following limitations are imposed by the STACKIT ALB API:
 - Maximum targets per pool: An individual target pool can contain a maximum of 250 targets.
-- Maximum listeners per ALB: A single ALB instance supports a maximum of 20 listeners.
+- Maximum target pools per ALB: A single ALB instance supports a maximum of 20 target pool.
 
-#### When to watch out for target limits
+#### Target limit
 
-A "target" in a pool corresponds directly to a worker node in your cluster. If you run a large cluster with a high number of worker nodes, or expect your cluster to dynamically scale to a large size, keep this limit in mind since a single backend Service port mapping cannot route traffic to more than 250 worker nodes simultaneously.
+A target corresponds directly to a node in your Kubernetes cluster. 
+The number of nodes must not exceed 250.
 
-#### When to watch out for the listener limit
+#### Target pool limit
 
-Because each IngressClass provisions a dedicated ALB instance, hitting the 20-listener threshold is rarely an issue for a basic setup but becomes a real risk when you start stacking custom ports across multiple applications sharing that same ALB. If your Ingress resources use the `alb.stackit.cloud/http-port` or `alb.stackit.cloud/https-port` annotations to expose different apps on unique custom port numbers, each distinctive port allocates its own listener on the shared ALB instance. This risk compounds quickly when those applications also require TLS encryption; since the controller must keep an extra HTTP listener active alongside the HTTPS listener to smoothly process automated ACME certificate challenges, a single secure app immediately consumes two slots instead of one, accelerating how fast you approach the API limit if multiple unique custom ports are configured.
+Each service reference in each ingress translates to a target pool. 
+If two ingresses or paths within an ingress reference the same service and port the controller will create two target pools.
+If all ingresses of a single ingress class exceed 20 target pools then the first 20 are admitted based on their [precedence](#rule-precedence).
 
 ### Configuration
 
