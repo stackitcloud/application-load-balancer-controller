@@ -325,7 +325,7 @@ var _ = Describe("IngressClassController", func() {
 					WithRule("host1.local", WithPath("/", new(networkingv1.PathTypePrefix), service.Name, networkingv1.ServiceBackendPort{Number: 80})),
 				)
 				testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, &ingress)
-				Eventually(ctx, func(g Gomega, ctx context.Context) {
+				Eventually(ctx, func(g Gomega) {
 					lb := albFake.LoadBalancer(projectID, region, spec.LoadBalancerName(ingressClass))
 					g.Expect(lb).NotTo(BeNil())
 					g.Expect(lb.TargetPools).To(HaveLen(1))
@@ -340,7 +340,7 @@ var _ = Describe("IngressClassController", func() {
 				})
 				Expect(k8sClient.Update(ctx, &node2)).To(Succeed())
 
-				Eventually(ctx, func(g Gomega, ctx context.Context) {
+				Eventually(ctx, func(g Gomega) {
 					lb := albFake.LoadBalancer(projectID, region, spec.LoadBalancerName(ingressClass))
 					g.Expect(lb).NotTo(BeNil())
 					g.Expect(lb.TargetPools).To(HaveLen(1))
@@ -356,7 +356,7 @@ var _ = Describe("IngressClassController", func() {
 				})
 				Expect(k8sClient.Status().Update(ctx, &node2)).To(Succeed())
 
-				Eventually(ctx, func(g Gomega, ctx context.Context) {
+				Eventually(ctx, func(g Gomega) {
 					lb := albFake.LoadBalancer(projectID, region, spec.LoadBalancerName(ingressClass))
 					g.Expect(lb).NotTo(BeNil())
 					g.Expect(lb.TargetPools).To(HaveLen(1))
@@ -368,7 +368,7 @@ var _ = Describe("IngressClassController", func() {
 			It("should remove a node that is deleted", func(ctx context.Context) {
 				Expect(k8sClient.Delete(ctx, &node2)).To(Succeed())
 
-				Eventually(ctx, func(g Gomega, ctx context.Context) {
+				Eventually(ctx, func(g Gomega) {
 					lb := albFake.LoadBalancer(projectID, region, spec.LoadBalancerName(ingressClass))
 					g.Expect(lb).NotTo(BeNil())
 					g.Expect(lb.TargetPools).To(HaveLen(1))
@@ -387,7 +387,7 @@ var _ = Describe("IngressClassController", func() {
 				}
 				Expect(k8sClient.Status().Update(ctx, &node3)).To(Succeed())
 
-				Eventually(ctx, func(g Gomega, ctx context.Context) {
+				Eventually(ctx, func(g Gomega) {
 					lb := albFake.LoadBalancer(projectID, region, spec.LoadBalancerName(ingressClass))
 					g.Expect(lb).NotTo(BeNil())
 					g.Expect(lb.TargetPools).To(HaveLen(1))
