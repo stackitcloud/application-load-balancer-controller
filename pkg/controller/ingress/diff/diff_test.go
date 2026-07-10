@@ -154,31 +154,6 @@ var _ = DescribeTable("UpdateNeeded",
 		},
 		true,
 	),
-	Entry("https certificates changed",
-		&albsdk.LoadBalancer{
-			Listeners: []albsdk.Listener{
-				{
-					Https: &albsdk.ProtocolOptionsHTTPS{
-						CertificateConfig: &albsdk.CertificateConfig{
-							CertificateIds: []string{"cert1"},
-						},
-					},
-				},
-			},
-		},
-		&albsdk.UpdateLoadBalancerPayload{
-			Listeners: []albsdk.Listener{
-				{
-					Https: &albsdk.ProtocolOptionsHTTPS{
-						CertificateConfig: &albsdk.CertificateConfig{
-							CertificateIds: []string{"cert1", "cert2"},
-						},
-					},
-				},
-			},
-		},
-		true,
-	),
 	Entry("target pool port changed",
 		&albsdk.LoadBalancer{
 			TargetPools: []albsdk.TargetPool{
@@ -328,7 +303,7 @@ var _ = DescribeTable("UpdateNeeded",
 				{
 					Https: &albsdk.ProtocolOptionsHTTPS{
 						CertificateConfig: &albsdk.CertificateConfig{
-							CertificateIds: []string{"cert-1"},
+							CertificateIds: []string{"cert-1", "cert-2"},
 						},
 					},
 				},
@@ -339,7 +314,32 @@ var _ = DescribeTable("UpdateNeeded",
 				{
 					Https: &albsdk.ProtocolOptionsHTTPS{
 						CertificateConfig: &albsdk.CertificateConfig{
-							CertificateIds: []string{"cert-2"},
+							CertificateIds: []string{"cert-1", "cert-3"},
+						},
+					},
+				},
+			},
+		},
+		true,
+	),
+	Entry("certificate reference added",
+		&albsdk.LoadBalancer{
+			Listeners: []albsdk.Listener{
+				{
+					Https: &albsdk.ProtocolOptionsHTTPS{
+						CertificateConfig: &albsdk.CertificateConfig{
+							CertificateIds: []string{"cert1"},
+						},
+					},
+				},
+			},
+		},
+		&albsdk.UpdateLoadBalancerPayload{
+			Listeners: []albsdk.Listener{
+				{
+					Https: &albsdk.ProtocolOptionsHTTPS{
+						CertificateConfig: &albsdk.CertificateConfig{
+							CertificateIds: []string{"cert1", "cert2"},
 						},
 					},
 				},
