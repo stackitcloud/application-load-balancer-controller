@@ -82,19 +82,10 @@ func pathChanged(c, d *albsdk.Path) bool {
 }
 
 func httpsOptionsChanged(c, d *albsdk.ProtocolOptionsHTTPS) bool {
-	if c == nil && d == nil {
-		return false
-	}
-	if c == nil || d == nil {
-		return true
-	}
-	if c.CertificateConfig == nil && d.CertificateConfig == nil {
-		return false
-	}
-	if c.CertificateConfig == nil || d.CertificateConfig == nil {
-		return true
-	}
-	return !slices.Equal(c.CertificateConfig.CertificateIds, d.CertificateConfig.CertificateIds)
+	return !slices.Equal(
+		ptr.Deref(ptr.Deref(c, albsdk.ProtocolOptionsHTTPS{}).CertificateConfig, albsdk.CertificateConfig{}).CertificateIds,
+		ptr.Deref(ptr.Deref(d, albsdk.ProtocolOptionsHTTPS{}).CertificateConfig, albsdk.CertificateConfig{}).CertificateIds,
+	)
 }
 
 func targetPoolsChanged(current, desired []albsdk.TargetPool) bool {
