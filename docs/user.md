@@ -221,3 +221,8 @@ Currently, application load balancers require at least one listener.
 If the ingress class results in zero listeners, a dummy listener on port 80 is added to be able to create the load balancer.
 This listener always returns the HTTP status code 404.
 Common scenarios where this can happen is when there are zero ingresses or an HTTPS-only load balancer does not have any certificates yet.
+
+### Troubleshooting
+
+The controller emits events on both ingresses and ingress classes.
+In case of unexpected behavior make sure to check both resources for any warning events.
