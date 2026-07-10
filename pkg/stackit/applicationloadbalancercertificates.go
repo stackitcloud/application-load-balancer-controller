@@ -2,6 +2,7 @@ package stackit
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	certsdk "github.com/stackitcloud/stackit-sdk-go/services/certificates/v2api"
@@ -52,6 +53,7 @@ func (cl certClient) CreateCertificate(
 func (cl certClient) ListCertificate(ctx context.Context, projectID, region string) ([]certsdk.GetCertificateResponse, error) {
 	certs := []certsdk.GetCertificateResponse{}
 	var nextPage string
+	pages := 0
 	for {
 		req := cl.client.DefaultAPI.ListCertificates(ctx, projectID, region)
 		if nextPage != "" {
@@ -62,10 +64,13 @@ func (cl certClient) ListCertificate(ctx context.Context, projectID, region stri
 			return nil, err
 		}
 		certs = append(certs, page.Items...)
-		if ptr.Deref(page.NextPageId, "") != "" {
-			nextPage = *page.NextPageId
-		} else {
+		if ptr.Deref(page.NextPageId, "") == "" {
 			break
+		}
+		nextPage = *page.NextPageId
+		pages++
+		if pages >= 1000 {
+			return nil, errors.New("maximum number of pages reached")
 		}
 	}
 	return certs, nil
