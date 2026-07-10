@@ -18,6 +18,7 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/stackitcloud/application-load-balancer-controller/pkg/kubeutil"
 	albsdk "github.com/stackitcloud/stackit-sdk-go/services/alb/v2api"
 	certsdk "github.com/stackitcloud/stackit-sdk-go/services/certificates/v2api"
 )
@@ -690,16 +691,11 @@ const (
 )
 
 func isNodeTerminating(node *corev1.Node) bool {
-	for _, taint := range node.Spec.Taints {
-		if taint.Key == TaintToBeDeleted {
-			return true
-		}
+	if kubeutil.GetTaint(node, TaintToBeDeleted) != nil {
+		return true
 	}
-
-	for _, condition := range node.Status.Conditions {
-		if condition.Type == ConditionNodeTermination && condition.Status == corev1.ConditionTrue {
-			return true
-		}
+	if cond := kubeutil.GetNodeCondition(node, ConditionNodeTermination); cond != nil && cond.Status == corev1.ConditionTrue {
+		return true
 	}
 	return false
 }
