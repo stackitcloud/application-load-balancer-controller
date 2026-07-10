@@ -464,7 +464,7 @@ func getTargetsOfNodes(nodes []corev1.Node) []albsdk.Target {
 			address := node.Status.Addresses[j]
 			if address.Type == corev1.NodeInternalIP {
 				targets = append(targets, albsdk.Target{
-					DisplayName: &node.Name,
+					DisplayName: &node.Name, // TODO: Sanitize node name (see CCM)
 					Ip:          &address.Address,
 				})
 				break

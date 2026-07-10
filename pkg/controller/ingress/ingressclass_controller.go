@@ -17,6 +17,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/events"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -94,6 +95,7 @@ func (r *IngressClassReconciler) updateStatus( //nolint:gocyclo // TODO: Make th
 	}
 
 	if alb.Status == nil || *alb.Status != albsdk.LOADBALANCERSTATUS_STATUS_READY {
+		r.Recorder.Eventf(ingressClass, nil, corev1.EventTypeNormal, "AlbNotReady", "Reconciling", "ALB is in status %q", ptr.Deref(alb.Status, "unknown"))
 		// ALB is not yet ready, requeue
 		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 	}
