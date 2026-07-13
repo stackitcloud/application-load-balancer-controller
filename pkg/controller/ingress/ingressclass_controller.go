@@ -72,27 +72,26 @@ func (r *IngressClassReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		ctrl.LoggerFrom(ctx).Info("Added finalizer")
 	}
 
-	if err := r.reconcileALBResources(ctx, ingressClass); err != nil {
+	alb, err := r.reconcileALBResources(ctx, ingressClass)
+	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to reconcile ALB resources: %w", err)
 	}
 
-	requeue, err := r.updateStatus(ctx, ingressClass)
+	if alb == nil {
+		return ctrl.Result{}, nil
+	}
+
+	requeue, err := r.updateStatus(ctx, ingressClass, alb)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update ingress status: %w", err)
 	}
-
-	log.V(1).Info("Successfully reconciled IngressClass", "Name", ingressClass.Name)
 
 	return requeue, nil
 }
 
 // updateStatus updates the status of the Ingresses with the ALB IP address
 func (r *IngressClassReconciler) updateStatus( //nolint:gocyclo // TODO: Make this function smaller.
-	ctx context.Context, ingressClass *networkingv1.IngressClass) (ctrl.Result, error) {
-	alb, err := r.ALBClient.GetLoadBalancer(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region, spec.LoadBalancerName(ingressClass))
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to get load balancer: %w", err)
-	}
+	ctx context.Context, ingressClass *networkingv1.IngressClass, alb *albsdk.LoadBalancer) (ctrl.Result, error) {
 
 	if alb.Status == nil || *alb.Status != albsdk.LOADBALANCERSTATUS_STATUS_READY {
 		r.Recorder.Eventf(ingressClass, nil, corev1.EventTypeNormal, "AlbNotReady", "Reconciling", "ALB is in status %q", ptr.Deref(alb.Status, "unknown"))
@@ -206,38 +205,43 @@ func (r *IngressClassReconciler) handleIngressClassDeletion(
 	return nil
 }
 
+// reconcileALBResources reconciles all reconciles STACKIT resources for the ingress class.
+// This includes certificates and the ALB itself.
+//
+// The function returns the up-to-date ALB if everything was successfully reconciled.
+// If the configuration of the ingress class is invalid then (nil, nil) is returned.
 func (r *IngressClassReconciler) reconcileALBResources( //nolint:gocyclo,funlen // TODO: Simplify this function.
 	ctx context.Context, ingressClass *networkingv1.IngressClass,
-) error {
+) (*albsdk.LoadBalancer, error) {
 	ingresses, err := r.getIngressesForIngressClass(ctx, ingressClass)
 	if err != nil {
-		return fmt.Errorf("failed to get ingresses for class: %w", err)
+		return nil, fmt.Errorf("failed to get ingresses for class: %w", err)
 	}
 
 	secrets, err := r.getTLSSecretsFromIngresses(ctx, ingresses)
 	if err != nil {
-		return fmt.Errorf("failed to get secrets for ingresses: %w", err)
+		return nil, fmt.Errorf("failed to get secrets for ingresses: %w", err)
 	}
 
 	services, err := r.getServicesForIngresses(ctx, ingresses)
 	if err != nil {
-		return fmt.Errorf("failed to get services for ingresses: %w", err)
+		return nil, fmt.Errorf("failed to get services for ingresses: %w", err)
 	}
 
 	nodes := corev1.NodeList{}
 	if err := r.Client.List(ctx, &nodes); err != nil {
-		return fmt.Errorf("failed to get nodes: %w", err)
+		return nil, fmt.Errorf("failed to get nodes: %w", err)
 	}
 
 	existingALB, err := r.ALBClient.GetLoadBalancer(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region, spec.LoadBalancerName(ingressClass))
 	if err != nil && !stackit.IsNotFound(err) {
-		return fmt.Errorf("failed to get load balancer: %w", err)
+		return nil, fmt.Errorf("failed to get load balancer: %w", err)
 	}
 	if stackit.IsNotFound(err) {
 		existingALB = nil
 	}
 
-	tree, errs := spec.BuildTree(
+	tree, errs, err := spec.BuildTree(
 		ingressClass,
 		ingresses,
 		secrets,
@@ -245,6 +249,10 @@ func (r *IngressClassReconciler) reconcileALBResources( //nolint:gocyclo,funlen 
 		nodes.Items,
 		existingALB,
 	)
+	if err != nil {
+		r.Recorder.Eventf(ingressClass, nil, corev1.EventTypeWarning, "InvalidIngressClass", "Reconciling", "The ingress class cannot be reconciled because it has an invalid configuration: %s", err.Error())
+		return nil, nil
+	}
 
 	for _, err := range errs {
 		err.RecordEvent(ingressClass, r.Recorder)
@@ -254,7 +262,7 @@ func (r *IngressClassReconciler) reconcileALBResources( //nolint:gocyclo,funlen 
 	// Certificates that are created in this function are to be added to this slice.
 	ingressClassCertificates, err := r.getCertificatesForIngressClass(ctx, ingressClass)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	missingCertificates := tree.GetMissingCertificates(ingressClassCertificates)
@@ -271,7 +279,7 @@ func (r *IngressClassReconciler) reconcileALBResources( //nolint:gocyclo,funlen 
 		response, err := r.CertificateClient.CreateCertificate(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region, createCertificatePayload)
 		if err != nil {
 			// TODO: Gracefully deal with errors
-			return fmt.Errorf("failed to create certificate: %w", err)
+			return nil, fmt.Errorf("failed to create certificate: %w", err)
 		}
 		ctrl.LoggerFrom(ctx).Info("Created certificate", "id", response.Id, "fingerprint", fingerprint)
 		ingressClassCertificates = append(ingressClassCertificates, *response)
@@ -290,19 +298,20 @@ func (r *IngressClassReconciler) reconcileALBResources( //nolint:gocyclo,funlen 
 		certIDMap[spec.CertificateFingerprint(*cert.Data.FingerprintSha256)] = *cert.Id
 	}
 
+	alb := existingALB
 	if existingALB == nil {
 		create := tree.ToCreatePayload(certIDMap, r.ALBConfig.ApplicationLoadBalancer.NetworkID, r.ALBConfig.Global.Region)
-		alb, err := r.ALBClient.CreateLoadBalancer(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region, create)
+		alb, err = r.ALBClient.CreateLoadBalancer(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region, create)
 		if err != nil {
-			return fmt.Errorf("failed to create load balancer: %w", err)
+			return nil, fmt.Errorf("failed to create load balancer: %w", err)
 		}
 		ctrl.LoggerFrom(ctx).Info("Created application load balancer", "name", create.Name, "version", *alb.Version)
 	} else {
 		update := tree.ToUpdatePayload(certIDMap, r.ALBConfig.ApplicationLoadBalancer.NetworkID, r.ALBConfig.Global.Region)
 		if diff.UpdateNeeded(existingALB, update) {
-			alb, err := r.ALBClient.UpdateLoadBalancer(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region, *update.Name, update)
+			alb, err = r.ALBClient.UpdateLoadBalancer(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region, *update.Name, update)
 			if err != nil {
-				return fmt.Errorf("failed to update load balancer: %w", err)
+				return nil, fmt.Errorf("failed to update load balancer: %w", err)
 			}
 			ctrl.LoggerFrom(ctx).Info("Updated application load balancer", "name", update.Name, "version", *alb.Version)
 		}
@@ -311,7 +320,7 @@ func (r *IngressClassReconciler) reconcileALBResources( //nolint:gocyclo,funlen 
 	for _, cert := range duplicateCerts {
 		if err := r.CertificateClient.DeleteCertificate(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region, cert); err != nil {
 			// TODO: fail gracefully
-			return fmt.Errorf("failed to delete duplicate certificate %q: %w", cert, err)
+			return nil, fmt.Errorf("failed to delete duplicate certificate %q: %w", cert, err)
 		}
 		ctrl.LoggerFrom(ctx).Info("Deleted duplicate certificate", "id", cert)
 	}
@@ -320,12 +329,12 @@ func (r *IngressClassReconciler) reconcileALBResources( //nolint:gocyclo,funlen 
 	for fingerprint, id := range unused {
 		if err := r.CertificateClient.DeleteCertificate(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region, id); err != nil {
 			// TODO: fail gracefully
-			return fmt.Errorf("failed to delete unused certificate %q: %w", id, err)
+			return nil, fmt.Errorf("failed to delete unused certificate %q: %w", id, err)
 		}
 		ctrl.LoggerFrom(ctx).Info("Deleted unused certificate", "id", id, "fingerprint", fingerprint)
 	}
 
-	return nil
+	return alb, nil
 }
 
 // getServicesForIngresses returns all services that are referenced anywhere in any of the ingresses.

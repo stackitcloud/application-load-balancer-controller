@@ -22,7 +22,7 @@ import (
 
 var _ = Describe("WorkTreeALB", func() {
 	It("should sort rules from most to least-specific even if their priority is inversed", func() {
-		tree, errs := BuildTree(&networkingv1.IngressClass{}, []networkingv1.Ingress{
+		tree, errs, err := BuildTree(&networkingv1.IngressClass{}, []networkingv1.Ingress{
 			Ingress(
 				"default", "ingress-with-higher-priority",
 				WithAnnotation(AnnotationPriority, "5"),
@@ -50,6 +50,7 @@ var _ = Describe("WorkTreeALB", func() {
 		}, nil, []corev1.Service{
 			Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 1337, 30000, corev1.ProtocolTCP)),
 		}, nil, nil)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(errs).To(BeEmpty())
 		createPayload := tree.ToCreatePayload(nil, "", "")
 		Expect(createPayload.Listeners[0].Http.Hosts[0].Host).To(HaveValue(Equal("my-host.local")))
@@ -65,7 +66,7 @@ var _ = Describe("WorkTreeALB", func() {
 
 	It("should match rules against correct node ports", func() {
 		const host = "my-host.local"
-		tree, errs := BuildTree(&networkingv1.IngressClass{}, []networkingv1.Ingress{
+		tree, errs, err := BuildTree(&networkingv1.IngressClass{}, []networkingv1.Ingress{
 			Ingress(
 				"default", "ingress-to-node-port-5000", WithUID("uid-1"),
 				WithRule(host, WithPath("/5000", new(networkingv1.PathTypeExact), "service-a", networkingv1.ServiceBackendPort{Number: 1337})),
@@ -92,6 +93,7 @@ var _ = Describe("WorkTreeALB", func() {
 				WithPort("1337", 1337, 5003, corev1.ProtocolTCP),
 			),
 		}, nil, nil)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(errs).To(BeEmpty())
 
 		createPayload := tree.ToCreatePayload(nil, "", "")
@@ -117,7 +119,7 @@ var _ = Describe("WorkTreeALB", func() {
 	})
 
 	It("should not expose ingress on HTTP if configured HTTPS-only", func() {
-		tree, errs := BuildTree(
+		tree, errs, err := BuildTree(
 			&networkingv1.IngressClass{},
 			[]networkingv1.Ingress{
 				Ingress(corev1.NamespaceDefault, "ingress",
@@ -138,13 +140,14 @@ var _ = Describe("WorkTreeALB", func() {
 				Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 80, 30000, corev1.ProtocolTCP)),
 			}, nil, nil,
 		)
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(BeEmpty())
 		Expect(tree.listeners).To(And(HaveLen(1), HaveKey(BeEquivalentTo(443))))
 	})
 
 	It("should return an error when the TLS secret doesn't exist", func() {
-		tree, errs := BuildTree(
+		tree, errs, err := BuildTree(
 			&networkingv1.IngressClass{},
 			[]networkingv1.Ingress{
 				Ingress(corev1.NamespaceDefault, "ingress-with-tls-secret-reference", WithTLSSecret("doesnt-exist"), WithRule("my-host.local", WithPath(
@@ -158,6 +161,7 @@ var _ = Describe("WorkTreeALB", func() {
 				Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 80, 30000, corev1.ProtocolTCP)),
 			}, nil, nil,
 		)
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(ConsistOf(
 			MatchAllFields(Fields{
@@ -177,7 +181,7 @@ var _ = Describe("WorkTreeALB", func() {
 	})
 
 	It("should return an error when the TLS secret isn't of type TLS", func() {
-		_, errs := BuildTree(
+		_, errs, err := BuildTree(
 			&networkingv1.IngressClass{},
 			[]networkingv1.Ingress{
 				Ingress(corev1.NamespaceDefault, "ingress-with-tls-secret-reference", WithTLSSecret("non-tls")),
@@ -189,6 +193,7 @@ var _ = Describe("WorkTreeALB", func() {
 				},
 			}, nil, nil, nil,
 		)
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(ConsistOf(
 			MatchAllFields(Fields{
@@ -200,7 +205,7 @@ var _ = Describe("WorkTreeALB", func() {
 	})
 
 	It("should return an error when TLS secret parsing fails", func() {
-		_, errs := BuildTree(
+		_, errs, err := BuildTree(
 			&networkingv1.IngressClass{},
 			[]networkingv1.Ingress{
 				Ingress(corev1.NamespaceDefault, "ingress-with-tls-secret-reference", WithTLSSecret("invalid-tls")),
@@ -216,6 +221,7 @@ var _ = Describe("WorkTreeALB", func() {
 				},
 			}, nil, nil, nil,
 		)
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(ConsistOf(
 			MatchAllFields(Fields{
@@ -227,7 +233,7 @@ var _ = Describe("WorkTreeALB", func() {
 	})
 
 	It("should process TLS secret correctly and return it as missing certificate", func() {
-		tree, errs := BuildTree(
+		tree, errs, err := BuildTree(
 			&networkingv1.IngressClass{},
 			[]networkingv1.Ingress{
 				Ingress(corev1.NamespaceDefault, "ingress-with-tls-secret-reference", WithTLSSecret("my-tls")),
@@ -243,6 +249,7 @@ var _ = Describe("WorkTreeALB", func() {
 				},
 			}, nil, nil, nil,
 		)
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(BeEmpty())
 		Expect(tree.GetMissingCertificates(nil)).To(ConsistOf(
@@ -255,7 +262,7 @@ var _ = Describe("WorkTreeALB", func() {
 	})
 
 	It("should return unused certificates that are no longer used by the ALB", func() {
-		tree, err := BuildTree(&networkingv1.IngressClass{}, []networkingv1.Ingress{
+		tree, errs, err := BuildTree(&networkingv1.IngressClass{}, []networkingv1.Ingress{
 			Ingress(corev1.NamespaceDefault, "ingress-with-tls-secret-reference", WithTLSSecret("my-tls")),
 		}, []corev1.Secret{
 			{
@@ -267,8 +274,9 @@ var _ = Describe("WorkTreeALB", func() {
 				},
 			},
 		}, []corev1.Service{}, nil, nil)
+		Expect(err).NotTo(HaveOccurred())
 
-		Expect(err).To(BeEmpty())
+		Expect(errs).To(BeEmpty())
 		Expect(tree.GetUnusedCertificates(map[CertificateFingerprint]string{
 			testdata.FixtureTLS1FingerprintSHA256: "id-1",
 			testdata.FixtureTLS2FingerprintSHA256: "id-2",
@@ -280,7 +288,7 @@ var _ = Describe("WorkTreeALB", func() {
 	})
 
 	It("should use TLS certificates only on ports that reference it", func() {
-		tree, errs := BuildTree(
+		tree, errs, err := BuildTree(
 			&networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{AnnotationHTTPSOnly: "true"}},
 			},
@@ -321,6 +329,7 @@ var _ = Describe("WorkTreeALB", func() {
 				Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 80, 30000, corev1.ProtocolTCP)),
 			}, nil, nil,
 		)
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(BeEmpty())
 		create := tree.ToCreatePayload(map[CertificateFingerprint]string{
@@ -342,7 +351,7 @@ var _ = Describe("WorkTreeALB", func() {
 	})
 
 	It("should enable websocket if enable on ingress class", func() {
-		tree, errs := BuildTree(
+		tree, errs, err := BuildTree(
 			&networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
@@ -363,6 +372,7 @@ var _ = Describe("WorkTreeALB", func() {
 				Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 80, 30000, corev1.ProtocolTCP)),
 			}, nil, nil,
 		)
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(BeEmpty())
 		create := tree.ToCreatePayload(nil, "network-id", "region")
@@ -376,7 +386,7 @@ var _ = Describe("WorkTreeALB", func() {
 	})
 
 	It("should enable websocket if enable on ingress", func() {
-		tree, errs := BuildTree(
+		tree, errs, err := BuildTree(
 			&networkingv1.IngressClass{},
 			[]networkingv1.Ingress{
 				Ingress(corev1.NamespaceDefault, "ingress-1", WithRule("my-host.local",
@@ -391,6 +401,7 @@ var _ = Describe("WorkTreeALB", func() {
 				Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 80, 30000, corev1.ProtocolTCP)),
 			}, nil, nil,
 		)
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(BeEmpty())
 		create := tree.ToCreatePayload(nil, "network-id", "region")
@@ -404,7 +415,7 @@ var _ = Describe("WorkTreeALB", func() {
 	})
 
 	It("should set WAF on all ports if specified on ingress class", func() {
-		tree, errs := BuildTree(
+		tree, errs, err := BuildTree(
 			&networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
@@ -425,6 +436,7 @@ var _ = Describe("WorkTreeALB", func() {
 				Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 80, 30000, corev1.ProtocolTCP)),
 			}, nil, nil,
 		)
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(BeEmpty())
 		create := tree.ToCreatePayload(nil, "network-id", "region")
@@ -434,7 +446,7 @@ var _ = Describe("WorkTreeALB", func() {
 	})
 
 	It("should set allowed source range on all ports if specified on ingress class", func() {
-		tree, errs := BuildTree(
+		tree, errs, err := BuildTree(
 			&networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
@@ -443,6 +455,7 @@ var _ = Describe("WorkTreeALB", func() {
 				},
 			}, nil, nil, nil, nil, nil,
 		)
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(BeEmpty())
 		create := tree.ToCreatePayload(nil, "network-id", "region")
@@ -450,7 +463,7 @@ var _ = Describe("WorkTreeALB", func() {
 	})
 
 	It("should set ALB to internal if annotation is true", func() {
-		tree, errs := BuildTree(
+		tree, errs, err := BuildTree(
 			&networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
@@ -459,6 +472,7 @@ var _ = Describe("WorkTreeALB", func() {
 				},
 			}, nil, nil, nil, nil, nil,
 		)
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(BeEmpty())
 		create := tree.ToCreatePayload(nil, "network-id", "region")
@@ -467,7 +481,7 @@ var _ = Describe("WorkTreeALB", func() {
 	})
 
 	It("should set ALB to static if annotation contains IP", func() {
-		tree, errs := BuildTree(
+		tree, errs, err := BuildTree(
 			&networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
@@ -476,6 +490,7 @@ var _ = Describe("WorkTreeALB", func() {
 				},
 			}, nil, nil, nil, nil, nil,
 		)
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(BeEmpty())
 		create := tree.ToCreatePayload(nil, "network-id", "region")
@@ -506,11 +521,12 @@ var _ = Describe("WorkTreeALB", func() {
 				}
 			}
 		}
-		_, errs := BuildTree(
+		_, errs, err := BuildTree(
 			&networkingv1.IngressClass{}, ingresses, nil, []corev1.Service{
 				Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 80, 30000, corev1.ProtocolTCP)),
 			}, nil, nil,
 		)
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(ConsistOf(
 			MatchAllFields(Fields{
@@ -537,7 +553,7 @@ var _ = Describe("WorkTreeALB", func() {
 	})
 
 	It("should set target pool TLS settings", func() {
-		tree, errs := BuildTree(
+		tree, errs, err := BuildTree(
 			&networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
@@ -570,6 +586,7 @@ var _ = Describe("WorkTreeALB", func() {
 					WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 80, 30001, corev1.ProtocolTCP)),
 			}, nil, nil,
 		)
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(BeEmpty())
 		create := tree.ToCreatePayload(nil, "network-id", "region")
@@ -582,7 +599,7 @@ var _ = Describe("WorkTreeALB", func() {
 	})
 
 	It("should use the log configuration from the existing load balancer", func() {
-		tree, errs := BuildTree(
+		tree, errs, err := BuildTree(
 			&networkingv1.IngressClass{}, nil, nil, nil, nil, &v2api.LoadBalancer{
 				Options: &v2api.LoadBalancerOptions{
 					Observability: &v2api.LoadbalancerOptionObservability{
@@ -594,6 +611,7 @@ var _ = Describe("WorkTreeALB", func() {
 				},
 			},
 		)
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(BeEmpty())
 		update := tree.ToUpdatePayload(nil, "network-id", "region")
@@ -602,11 +620,12 @@ var _ = Describe("WorkTreeALB", func() {
 	})
 
 	It("should use the version from the existing load balancer in update payload", func() {
-		tree, errs := BuildTree(
+		tree, errs, err := BuildTree(
 			&networkingv1.IngressClass{}, nil, nil, nil, nil, &v2api.LoadBalancer{
 				Version: new("current-version"),
 			},
 		)
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(BeEmpty())
 		update := tree.ToUpdatePayload(nil, "network-id", "region")
@@ -614,7 +633,7 @@ var _ = Describe("WorkTreeALB", func() {
 	})
 
 	It("should turn implementation-specific paths into exact matchers", func() {
-		tree, errs := BuildTree(
+		tree, errs, err := BuildTree(
 			&networkingv1.IngressClass{},
 			[]networkingv1.Ingress{
 				Ingress(corev1.NamespaceDefault, "ingress-1", WithRule("my-host.local",
@@ -626,6 +645,7 @@ var _ = Describe("WorkTreeALB", func() {
 				Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 80, 30000, corev1.ProtocolTCP)),
 			}, nil, nil,
 		)
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(BeEmpty())
 		create := tree.ToCreatePayload(nil, "network-id", "region")
@@ -633,7 +653,7 @@ var _ = Describe("WorkTreeALB", func() {
 	})
 
 	It("should return an error on duplicate paths", func() {
-		_, errs := BuildTree(
+		_, errs, err := BuildTree(
 			&networkingv1.IngressClass{},
 			[]networkingv1.Ingress{
 				Ingress(corev1.NamespaceDefault, "ingress-1", WithRule("my-host.local",
@@ -648,6 +668,7 @@ var _ = Describe("WorkTreeALB", func() {
 				Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 80, 30000, corev1.ProtocolTCP)),
 			}, nil, nil,
 		)
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(ConsistOf(
 			MatchAllFields(Fields{
@@ -659,7 +680,7 @@ var _ = Describe("WorkTreeALB", func() {
 	})
 
 	It("should drop target pools with etp=Local and missing health check port", func() {
-		tree, errs := BuildTree(
+		tree, errs, err := BuildTree(
 			&networkingv1.IngressClass{},
 			[]networkingv1.Ingress{
 				Ingress(corev1.NamespaceDefault, "ingress-1", WithRule("my-host.local",
@@ -676,6 +697,7 @@ var _ = Describe("WorkTreeALB", func() {
 				),
 			}, nil, nil,
 		)
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(ConsistOf(
 			MatchAllFields(Fields{
@@ -688,7 +710,7 @@ var _ = Describe("WorkTreeALB", func() {
 	})
 
 	It("should filter out nodes that don't meet the criteria to serve traffic", func() {
-		tree, errs := BuildTree(
+		tree, errs, err := BuildTree(
 			&networkingv1.IngressClass{},
 			[]networkingv1.Ingress{
 				Ingress(corev1.NamespaceDefault, "ingress-1", WithRule("my-host.local",
@@ -753,6 +775,7 @@ var _ = Describe("WorkTreeALB", func() {
 				},
 			}, nil,
 		)
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(BeEmpty())
 		create := tree.ToCreatePayload(nil, "network-id", "region")
@@ -766,7 +789,7 @@ var _ = Describe("WorkTreeALB", func() {
 	})
 
 	It("should have all slices ordered consistently", func() {
-		tree, errs := BuildTree(
+		tree, errs, err := BuildTree(
 			&networkingv1.IngressClass{},
 			[]networkingv1.Ingress{
 				Ingress(corev1.NamespaceDefault, "ingress-1", WithUID("ingress-1-uid"), WithRule("b.local",
@@ -811,6 +834,7 @@ var _ = Describe("WorkTreeALB", func() {
 				},
 			}, nil,
 		)
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(BeEmpty())
 		create := tree.ToCreatePayload(nil, "network-id", "region")
@@ -867,7 +891,7 @@ var _ = Describe("WorkTreeALB", func() {
 	})
 
 	It("should error if HTTPS port is out of range", func() {
-		tree, errs := BuildTree(
+		tree, errs, err := BuildTree(
 			&networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
@@ -896,6 +920,7 @@ var _ = Describe("WorkTreeALB", func() {
 				),
 			}, nil, nil,
 		)
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(ConsistOf(
 			MatchAllFields(Fields{
@@ -908,7 +933,7 @@ var _ = Describe("WorkTreeALB", func() {
 	})
 
 	It("should error if HTTP port is out of range", func() {
-		tree, errs := BuildTree(
+		tree, errs, err := BuildTree(
 			&networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
@@ -928,6 +953,7 @@ var _ = Describe("WorkTreeALB", func() {
 				),
 			}, nil, nil,
 		)
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(ConsistOf(
 			MatchAllFields(Fields{
@@ -938,4 +964,24 @@ var _ = Describe("WorkTreeALB", func() {
 		))
 		Expect(tree.targetPools).To(BeEmpty())
 	})
+
+	DescribeTable("external IP", func(externalIP, expectErr string) {
+		_, _, err := BuildTree(
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationExternalIP: externalIP,
+					},
+				},
+			}, nil, nil, nil, nil, nil,
+		)
+		if expectErr != "" {
+			Expect(err).To(MatchError(expectErr))
+		}
+	},
+		Entry("valid", "10.0.0.1", ""),
+		Entry("UUID not supported", "00000000-0000-0000-0000-000000000000", `failed to parse external IP annotation: ParseAddr("00000000-0000-0000-0000-000000000000"): unable to parse IP`),
+		Entry("CIDR not supported", "10.0.0.1/24", `failed to parse external IP annotation: ParseAddr("10.0.0.1/24"): unexpected character (at "/24")`),
+		Entry("IPv6 not supported", "2001:db8::1", "external IP annotation is not an IPv4 address"),
+	)
 })

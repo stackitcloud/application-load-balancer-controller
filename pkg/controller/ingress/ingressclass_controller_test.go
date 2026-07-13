@@ -3,6 +3,7 @@ package ingress
 import (
 	"context"
 	"sync"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -448,5 +449,22 @@ var _ = Describe("IngressClassController", func() {
 				}),
 			}),
 		})))
+	})
+
+	It("should log an event when the ingress class cannot be reconciled due to an invalid configuration", func(ctx context.Context) {
+		ignoredIngressClass := &networkingv1.IngressClass{
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: "ingressclass-",
+				Annotations: map[string]string{
+					spec.AnnotationExternalIP: "not-valid",
+				},
+			},
+			Spec: networkingv1.IngressClassSpec{
+				Controller: controllerName,
+			},
+		}
+		testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, ignoredIngressClass)
+
+		Eventually(recorder.Events).WithTimeout(5 * time.Second).Should(Receive(Equal(`Warning InvalidIngressClass The ingress class cannot be reconciled because it has an invalid configuration: failed to parse external IP annotation: ParseAddr("not-valid"): unable to parse IP`)))
 	})
 })

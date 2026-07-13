@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"net/netip"
 	"slices"
 	"strings"
 
@@ -88,6 +89,10 @@ type WorkTreeCertificate struct {
 	Ports map[uint16]any
 }
 
+var servicePlans = []string{
+	"p10",
+}
+
 // BuildTree creates a new work tree.
 // It tries to fit as much ingresses into the work tree as possible, bound by the limits of the application load balancer.
 //
@@ -100,6 +105,8 @@ type WorkTreeCertificate struct {
 // I.e. all ingresses will be processed regardless of their ingress class reference.
 //
 // This function changes the order of the slice ingresses.
+//
+// This function either return a tree and some error events or a nil tree and an error indicating that the entire ALB is invalid.
 func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make it much simpler.
 	ingressClass *networkingv1.IngressClass,
 	ingresses []networkingv1.Ingress,
@@ -107,7 +114,7 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 	services []corev1.Service,
 	nodes []corev1.Node,
 	existingALB *albsdk.LoadBalancer,
-) (*WorkTreeALB, []ErrorEvent) {
+) (*WorkTreeALB, []ErrorEvent, error) {
 	errors := []ErrorEvent{}
 
 	servicesMap := map[types.NamespacedName]corev1.Service{}
@@ -121,12 +128,17 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 
 	targets := getTargetsOfNodes(nodes)
 
+	externalIP, err := parseExternalIP(ingressClass)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	tree := &WorkTreeALB{
 		ingressClass: ingressClass,
 		planID:       GetAnnotation(AnnotationPlanID, "", ingressClass),
 		waf:          GetAnnotation(AnnotationWAFName, "", ingressClass),
 		internalLB:   GetAnnotation(AnnotationInternal, false, ingressClass),
-		externalIP:   GetAnnotation(AnnotationExternalIP, "", ingressClass),
+		externalIP:   externalIP,
 
 		listeners:    map[uint16]*workTreeListener{},
 		targetPools:  map[ingressPathReference]*albsdk.TargetPool{},
@@ -243,7 +255,21 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 		}
 	}
 
-	return tree, errors
+	return tree, errors, nil
+}
+
+func parseExternalIP(ingressClass *networkingv1.IngressClass) (string, error) {
+	externalIP := GetAnnotation(AnnotationExternalIP, "", ingressClass)
+	if externalIP != "" {
+		addr, err := netip.ParseAddr(externalIP)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse external IP annotation: %w", err)
+		}
+		if !addr.Is4() {
+			return "", fmt.Errorf("external IP annotation is not an IPv4 address")
+		}
+	}
+	return externalIP, nil
 }
 
 func addAccessControlToTree(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass) {
