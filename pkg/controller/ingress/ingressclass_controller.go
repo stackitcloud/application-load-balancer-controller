@@ -90,9 +90,8 @@ func (r *IngressClassReconciler) Reconcile(ctx context.Context, req ctrl.Request
 }
 
 // updateStatus updates the status of the Ingresses with the ALB IP address
-func (r *IngressClassReconciler) updateStatus( //nolint:gocyclo // TODO: Make this function smaller.
+func (r *IngressClassReconciler) updateStatus(
 	ctx context.Context, ingressClass *networkingv1.IngressClass, alb *albsdk.LoadBalancer) (ctrl.Result, error) {
-
 	if alb.Status == nil || *alb.Status != albsdk.LOADBALANCERSTATUS_STATUS_READY {
 		r.Recorder.Eventf(ingressClass, nil, corev1.EventTypeNormal, "AlbNotReady", "Reconciling", "ALB is in status %q", ptr.Deref(alb.Status, "unknown"))
 		// ALB is not yet ready, requeue
@@ -250,7 +249,8 @@ func (r *IngressClassReconciler) reconcileALBResources( //nolint:gocyclo,funlen 
 		existingALB,
 	)
 	if err != nil {
-		r.Recorder.Eventf(ingressClass, nil, corev1.EventTypeWarning, "InvalidIngressClass", "Reconciling", "The ingress class cannot be reconciled because it has an invalid configuration: %s", err.Error())
+		r.Recorder.Eventf(ingressClass, nil, corev1.EventTypeWarning, "InvalidIngressClass", "Reconciling",
+			"The ingress class cannot be reconciled because it has an invalid configuration: %s", err.Error())
 		return nil, nil
 	}
 

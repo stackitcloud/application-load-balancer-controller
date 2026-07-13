@@ -465,6 +465,8 @@ var _ = Describe("IngressClassController", func() {
 		}
 		testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, ignoredIngressClass)
 
-		Eventually(recorder.Events).WithTimeout(5 * time.Second).Should(Receive(Equal(`Warning InvalidIngressClass The ingress class cannot be reconciled because it has an invalid configuration: failed to parse external IP annotation: ParseAddr("not-valid"): unable to parse IP`)))
+		Eventually(recorder.Events).WithTimeout(5 * time.Second).Should(Receive(Equal(
+			`Warning InvalidIngressClass The ingress class cannot be reconciled because it has an invalid configuration: ` +
+				`failed to parse external IP annotation: ParseAddr("not-valid"): unable to parse IP`)))
 	})
 })

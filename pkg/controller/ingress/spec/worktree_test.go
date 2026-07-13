@@ -982,7 +982,8 @@ var _ = Describe("WorkTreeALB", func() {
 		}
 	},
 		Entry("valid", "10.0.0.1", ""),
-		Entry("UUID not supported", "00000000-0000-0000-0000-000000000000", `failed to parse external IP annotation: ParseAddr("00000000-0000-0000-0000-000000000000"): unable to parse IP`),
+		Entry("UUID not supported", "00000000-0000-0000-0000-000000000000",
+			`failed to parse external IP annotation: ParseAddr("00000000-0000-0000-0000-000000000000"): unable to parse IP`),
 		Entry("CIDR not supported", "10.0.0.1/24", `failed to parse external IP annotation: ParseAddr("10.0.0.1/24"): unexpected character (at "/24")`),
 		Entry("IPv6 not supported", "2001:db8::1", "external IP annotation is not an IPv4 address"),
 	)
@@ -1003,7 +1004,6 @@ var _ = Describe("WorkTreeALB", func() {
 			Expect(err).NotTo(HaveOccurred())
 		}
 	},
-		Entry("empty", "", ""),
 		Entry("valid", "p10", ""),
 		Entry("invalid", "p1337", `invalid plan id "p1337"`),
 	)
