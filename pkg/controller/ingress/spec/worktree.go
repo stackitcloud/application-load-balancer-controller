@@ -89,10 +89,6 @@ type WorkTreeCertificate struct {
 	Ports map[uint16]any
 }
 
-var servicePlans = []string{
-	"p10",
-}
-
 // BuildTree creates a new work tree.
 // It tries to fit as much ingresses into the work tree as possible, bound by the limits of the application load balancer.
 //
@@ -133,9 +129,14 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 		return nil, nil, err
 	}
 
+	planID, err := parsePlanID(ingressClass)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	tree := &WorkTreeALB{
 		ingressClass: ingressClass,
-		planID:       GetAnnotation(AnnotationPlanID, "", ingressClass),
+		planID:       planID,
 		waf:          GetAnnotation(AnnotationWAFName, "", ingressClass),
 		internalLB:   GetAnnotation(AnnotationInternal, false, ingressClass),
 		externalIP:   externalIP,
@@ -270,6 +271,20 @@ func parseExternalIP(ingressClass *networkingv1.IngressClass) (string, error) {
 		}
 	}
 	return externalIP, nil
+}
+
+var servicePlans = []string{
+	"p10",
+}
+
+const defaultServicePlan = "p10"
+
+func parsePlanID(ingressClass *networkingv1.IngressClass) (string, error) {
+	planID := GetAnnotation(AnnotationPlanID, defaultServicePlan, ingressClass)
+	if !slices.Contains(servicePlans, planID) {
+		return "", fmt.Errorf("invalid plan id %q", planID)
+	}
+	return planID, nil
 }
 
 func addAccessControlToTree(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass) {

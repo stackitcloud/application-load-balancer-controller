@@ -977,11 +977,34 @@ var _ = Describe("WorkTreeALB", func() {
 		)
 		if expectErr != "" {
 			Expect(err).To(MatchError(expectErr))
+		} else {
+			Expect(err).NotTo(HaveOccurred())
 		}
 	},
 		Entry("valid", "10.0.0.1", ""),
 		Entry("UUID not supported", "00000000-0000-0000-0000-000000000000", `failed to parse external IP annotation: ParseAddr("00000000-0000-0000-0000-000000000000"): unable to parse IP`),
 		Entry("CIDR not supported", "10.0.0.1/24", `failed to parse external IP annotation: ParseAddr("10.0.0.1/24"): unexpected character (at "/24")`),
 		Entry("IPv6 not supported", "2001:db8::1", "external IP annotation is not an IPv4 address"),
+	)
+
+	DescribeTable("service plans", func(planID, expectErr string) {
+		_, _, err := BuildTree(
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationPlanID: planID,
+					},
+				},
+			}, nil, nil, nil, nil, nil,
+		)
+		if expectErr != "" {
+			Expect(err).To(MatchError(expectErr))
+		} else {
+			Expect(err).NotTo(HaveOccurred())
+		}
+	},
+		Entry("empty", "", ""),
+		Entry("valid", "p10", ""),
+		Entry("invalid", "p1337", `invalid plan id "p1337"`),
 	)
 })
