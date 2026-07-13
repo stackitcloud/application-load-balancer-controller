@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"net"
 	"net/netip"
 	"slices"
 	"strings"
@@ -147,7 +148,9 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 		certificates: map[CertificateFingerprint]WorkTreeCertificate{},
 	}
 
-	addAccessControlToTree(tree, ingressClass)
+	if err := addAccessControlToTree(tree, ingressClass); err != nil {
+		return nil, nil, err
+	}
 
 	slices.SortFunc(ingresses, func(a, b networkingv1.Ingress) int {
 		if diff := GetAnnotation(AnnotationPriority, 0, &b) - GetAnnotation(AnnotationPriority, 0, &a); diff != 0 {
@@ -287,15 +290,22 @@ func parsePlanID(ingressClass *networkingv1.IngressClass) (string, error) {
 	return planID, nil
 }
 
-func addAccessControlToTree(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass) {
+func addAccessControlToTree(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass) error {
 	annotation := GetAnnotation(AnnotationAllowedSourceRanges, "", ingressClass)
 	if annotation == "" {
-		return
+		return nil
 	}
 	ranges := strings.Split(annotation, ",")
+	for i, r := range ranges {
+		_, _, err := net.ParseCIDR(r)
+		if err != nil {
+			return fmt.Errorf("IP range %d is invalid: %w", i, err)
+		}
+	}
 	tree.accessControl = &albsdk.LoadbalancerOptionAccessControl{
 		AllowedSourceRanges: ranges,
 	}
+	return nil
 }
 
 // addPath adds the given path to tree under the given port and protocol.

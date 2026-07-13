@@ -1007,4 +1007,25 @@ var _ = Describe("WorkTreeALB", func() {
 		Entry("valid", "p10", ""),
 		Entry("invalid", "p1337", `invalid plan id "p1337"`),
 	)
+
+	DescribeTable("service plans", func(sourceRanges, expectErr string) {
+		_, _, err := BuildTree(
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationAllowedSourceRanges: sourceRanges,
+					},
+				},
+			}, nil, nil, nil, nil, nil,
+		)
+		if expectErr != "" {
+			Expect(err).To(MatchError(expectErr))
+		} else {
+			Expect(err).NotTo(HaveOccurred())
+		}
+	},
+		Entry("valid", "10.0.0.0/24", ""),
+		Entry("invalid", "10.0.0.0/24,invalid-range", `IP range 1 is invalid: invalid CIDR address: invalid-range`),
+		Entry("invalid subnet", "10.0.0.0/24,10.1.0.0/46", `IP range 1 is invalid: invalid CIDR address: 10.1.0.0/46`),
+	)
 })
