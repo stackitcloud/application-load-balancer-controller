@@ -168,9 +168,9 @@ Configure the STACKIT Application Load Balancer using the following annotations.
 | `alb.stackit.cloud/http-port` | Integer | Ingress | Optional | If set, specifies a custom HTTP port (Default is 80). |
 | `alb.stackit.cloud/https-port` | Integer | Ingress | Optional | If set, specifies a custom HTTPS port (Default is 443). |
 | `alb.stackit.cloud/https-only` | Boolean | Ingress | Optional | If true, the Ingress will not be reachable via HTTP and only via HTTPS |
-| `alb.stackit.cloud/traget-pool-tls-enabled` | Boolean | IngressClass, Ingress, Service | Optional | Enables TLS bridging using OS trusted CAs. |
-| `alb.stackit.cloud/traget-pool-tls-custom-ca` | String | IngressClass, Ingress, Service | Optional | Enables TLS bridging with a custom CA. |
-| `alb.stackit.cloud/traget-pool-tls-skip-certificate-validation`| Boolean | IngressClass, Ingress, Service | Optional | Enables TLS bridging but skips certificate validation. |
+| `alb.stackit.cloud/target-pool-tls-enabled` | Boolean | IngressClass, Ingress, Service | Optional | Enables TLS connections to targets. The endpoints of the referenced service must accept TLS connections. |
+| `alb.stackit.cloud/target-pool-tls-custom-ca` | String | IngressClass, Ingress, Service | Optional | A custom certificate authority for TLS connections to targets. The value must contain a PEM-encoded certificate that is a certificate authority. |
+| `alb.stackit.cloud/target-pool-tls-skip-certificate-validation`| Boolean | IngressClass, Ingress, Service | Optional | Disables certificate validation for connections to targets. |
 | `alb.stackit.cloud/allowed-source-ranges`| String | IngressClass | Accepts a comma-separated list of IP ranges. E.g. 10.0.0.0/24,1.2.3.4/32. If unset, all IPs are allowed. |
 
 ### Known Limitations
