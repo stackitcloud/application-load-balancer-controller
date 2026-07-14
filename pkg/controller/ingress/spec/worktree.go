@@ -360,6 +360,9 @@ func addAccessControlToTree(tree *WorkTreeALB, ingressClass *networkingv1.Ingres
 	}
 	ranges := strings.Split(annotation, ",")
 	for i, r := range ranges {
+		if k := slices.Index(ranges, r); k < i {
+			return fmt.Errorf("duplicate range in annotation %s", AnnotationAllowedSourceRanges)
+		}
 		_, _, err := net.ParseCIDR(r)
 		if err != nil {
 			return fmt.Errorf("IP range %d is invalid: %w", i, err)
