@@ -75,7 +75,7 @@ const (
 // GetAnnotation parses the value of the annotation and return type T.
 // If T is string then the value is returned raw.
 // For int and bool Atoi and ParseBool are called respectively.
-// If parsing fails, an error is returned.
+// If parsing fails, an error is returned together with default value.
 // Only the first found value is parsed.
 //
 // GetAnnotation panics if T is neither a string, int or bool.

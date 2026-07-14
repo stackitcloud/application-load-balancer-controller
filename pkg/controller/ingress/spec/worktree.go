@@ -166,14 +166,8 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 	slices.SortFunc(ingresses, func(a, b networkingv1.Ingress) int {
 		// If the priority annotation is invalid, we should not admit that ingress later on.
 		// For sorting, we consider an invalid priority to be zero.
-		prioA, err := GetAnnotation(AnnotationPriority, 0, &a)
-		if err != nil {
-			prioA = 0
-		}
-		prioB, err := GetAnnotation(AnnotationPriority, 0, &b)
-		if err != nil {
-			prioB = 0
-		}
+		prioA, _ := GetAnnotation(AnnotationPriority, 0, &a)
+		prioB, _ := GetAnnotation(AnnotationPriority, 0, &b)
 		if diff := prioB - prioA; diff != 0 {
 			return diff
 		}
