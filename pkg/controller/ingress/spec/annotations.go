@@ -73,9 +73,11 @@ const (
 // GetAnnotation parses the value of the annotation and return type T.
 // If T is string then the value is returned raw.
 // For int and bool Atoi and ParseBool are called respectively.
-// If parsing fails or T is any other type, defaultValue is returned.
+// If parsing fails, an error is returned.
 // Only the first found value is parsed.
-func GetAnnotation[T any](annotation string, defaultValue T, objects ...client.Object) T {
+//
+// GetAnnotation panics if T is neither a string, int or bool.
+func GetAnnotation[T any](annotation string, defaultValue T, objects ...client.Object) (T, error) {
 	var rawVal string
 	var found bool
 
@@ -89,7 +91,7 @@ func GetAnnotation[T any](annotation string, defaultValue T, objects ...client.O
 	}
 
 	if !found {
-		return defaultValue
+		return defaultValue, nil
 	}
 
 	var result any
@@ -97,18 +99,18 @@ func GetAnnotation[T any](annotation string, defaultValue T, objects ...client.O
 
 	switch any(defaultValue).(type) {
 	case string:
-		return any(rawVal).(T)
+		return any(rawVal).(T), nil
 	case int:
 		result, err = strconv.Atoi(rawVal)
 	case bool:
 		result, err = strconv.ParseBool(rawVal)
 	default:
-		return defaultValue
+		panic("Invalid type T for GetAnnotation")
 	}
 
 	if err != nil {
-		return defaultValue
+		return defaultValue, err
 	}
 
-	return result.(T)
+	return result.(T), nil
 }

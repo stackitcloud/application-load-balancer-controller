@@ -965,12 +965,12 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(tree.targetPools).To(BeEmpty())
 	})
 
-	DescribeTable("external IP", func(externalIP, expectErr string) {
+	DescribeTable("parsing ingress class annotation", func(key, value, expectErr string) {
 		_, _, err := BuildTree(
 			&networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						AnnotationExternalIP: externalIP,
+						key: value,
 					},
 				},
 			}, nil, nil, nil, nil, nil,
@@ -981,51 +981,59 @@ var _ = Describe("WorkTreeALB", func() {
 			Expect(err).NotTo(HaveOccurred())
 		}
 	},
-		Entry("valid", "10.0.0.1", ""),
-		Entry("UUID not supported", "00000000-0000-0000-0000-000000000000",
+		Entry("external IP - valid", AnnotationExternalIP, "10.0.0.1", ""),
+		Entry("external IP - UUID not supported", AnnotationExternalIP, "00000000-0000-0000-0000-000000000000",
 			`failed to parse external IP annotation: ParseAddr("00000000-0000-0000-0000-000000000000"): unable to parse IP`),
-		Entry("CIDR not supported", "10.0.0.1/24", `failed to parse external IP annotation: ParseAddr("10.0.0.1/24"): unexpected character (at "/24")`),
-		Entry("IPv6 not supported", "2001:db8::1", "external IP annotation is not an IPv4 address"),
+		Entry("external IP - CIDR not supported", AnnotationExternalIP, "10.0.0.1/24",
+			`failed to parse external IP annotation: ParseAddr("10.0.0.1/24"): unexpected character (at "/24")`),
+		Entry("external IP - IPv6 not supported", AnnotationExternalIP, "2001:db8::1", "external IP annotation is not an IPv4 address"),
+		Entry("plan ID - valid", AnnotationPlanID, "p10", ""),
+		Entry("plan ID - invalid", AnnotationPlanID, "p1337", `invalid plan id "p1337"`),
+		Entry("allowed source range - valid", AnnotationAllowedSourceRanges, "10.0.0.0/24", ""),
+		Entry("allowed source range - invalid", AnnotationAllowedSourceRanges, "10.0.0.0/24,invalid-range",
+			`IP range 1 is invalid: invalid CIDR address: invalid-range`),
+		Entry("allowed source range - invalid subnet", AnnotationAllowedSourceRanges, "10.0.0.0/24,10.1.0.0/46",
+			`IP range 1 is invalid: invalid CIDR address: 10.1.0.0/46`),
+		Entry("internal LB - true", AnnotationInternal, "true", ""),
+		Entry("internal LB - false", AnnotationInternal, "false", ""),
+		Entry("internal LB - invalid", AnnotationInternal, "maybe",
+			`failed to parse annotation alb.stackit.cloud/internal-alb: strconv.ParseBool: parsing "maybe": invalid syntax`),
 	)
 
-	DescribeTable("service plans", func(planID, expectErr string) {
-		_, _, err := BuildTree(
-			&networkingv1.IngressClass{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{
-						AnnotationPlanID: planID,
-					},
-				},
-			}, nil, nil, nil, nil, nil,
+	DescribeTable("parsing ingress annotation", func(key, value, expectErr string) {
+		_, errs, err := BuildTree(
+			&networkingv1.IngressClass{},
+			[]networkingv1.Ingress{
+				Ingress("default", "ingress", WithAnnotation(key, value), WithRule("my-host.local",
+					WithPath("/inherit", new(networkingv1.PathTypePrefix), "my-service", networkingv1.ServiceBackendPort{Number: 80})),
+				),
+			}, nil, []corev1.Service{
+				Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 80, 30000, corev1.ProtocolTCP)),
+			}, nil, nil,
 		)
+		Expect(err).NotTo(HaveOccurred())
 		if expectErr != "" {
-			Expect(err).To(MatchError(expectErr))
+			Expect(errs).To(HaveExactElements(MatchError(expectErr)))
 		} else {
-			Expect(err).NotTo(HaveOccurred())
+			Expect(errs).To(BeEmpty())
 		}
 	},
-		Entry("valid", "p10", ""),
-		Entry("invalid", "p1337", `invalid plan id "p1337"`),
-	)
-
-	DescribeTable("service plans", func(sourceRanges, expectErr string) {
-		_, _, err := BuildTree(
-			&networkingv1.IngressClass{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{
-						AnnotationAllowedSourceRanges: sourceRanges,
-					},
-				},
-			}, nil, nil, nil, nil, nil,
-		)
-		if expectErr != "" {
-			Expect(err).To(MatchError(expectErr))
-		} else {
-			Expect(err).NotTo(HaveOccurred())
-		}
-	},
-		Entry("valid", "10.0.0.0/24", ""),
-		Entry("invalid", "10.0.0.0/24,invalid-range", `IP range 1 is invalid: invalid CIDR address: invalid-range`),
-		Entry("invalid subnet", "10.0.0.0/24,10.1.0.0/46", `IP range 1 is invalid: invalid CIDR address: 10.1.0.0/46`),
+		Entry("TLS - enabled", AnnotationTargetPoolTLSEnabled, "t", ""),
+		Entry("TLS - invalid", AnnotationTargetPoolTLSEnabled, "maybe",
+			`Failed to parse annotation alb.stackit.cloud/target-pool-tls-enabled: strconv.ParseBool: parsing "maybe": invalid syntax`),
+		Entry("TLS skip validation - enabled", AnnotationTargetPoolTLSSkipCertificateValidation, "true", ""),
+		Entry("TLS skip validation - invalid", AnnotationTargetPoolTLSSkipCertificateValidation, "maybe",
+			`Failed to parse annotation alb.stackit.cloud/target-pool-tls-skip-certificate-validation: strconv.ParseBool: parsing "maybe": invalid syntax`),
+		Entry("TLS custom CA - no PEM", AnnotationTargetPoolTLSCustomCa, "no PEM",
+			`Failed to parse annotation alb.stackit.cloud/target-pool-tls-custom-ca: failed to find PEM block`),
+		Entry("TLS custom CA - valid", AnnotationTargetPoolTLSCustomCa, testdata.FixtureTLS1PublicKey, ""),
+		Entry("websocket - false", AnnotationWebSocket, "f", ""),
+		Entry("websocket - true", AnnotationWebSocket, "t", ""),
+		Entry("websocket - invalid", AnnotationWebSocket, "maybe",
+			`Failed to parse annotation alb.stackit.cloud/websocket: strconv.ParseBool: parsing "maybe": invalid syntax`),
+		Entry("priority - positive", AnnotationPriority, "7", ""),
+		Entry("priority - zero", AnnotationPriority, "0", ""),
+		Entry("priority - negative", AnnotationPriority, "-2", ""),
+		Entry("priority - no number", AnnotationPriority, "maybe", `Invalid priority: strconv.Atoi: parsing "maybe": invalid syntax`),
 	)
 })

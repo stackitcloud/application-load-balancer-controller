@@ -4,7 +4,9 @@ import (
 	"cmp"
 	"crypto/sha256"
 	cryptotls "crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
+	"encoding/pem"
 	"fmt"
 	"maps"
 	"math"
@@ -135,11 +137,16 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 		return nil, nil, err
 	}
 
+	internalLB, err := GetAnnotation(AnnotationInternal, false, ingressClass)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to parse annotation %s: %w", AnnotationInternal, err)
+	}
+
 	tree := &WorkTreeALB{
 		ingressClass: ingressClass,
 		planID:       planID,
-		waf:          GetAnnotation(AnnotationWAFName, "", ingressClass),
-		internalLB:   GetAnnotation(AnnotationInternal, false, ingressClass),
+		waf:          ingressClass.Annotations[AnnotationWAFName],
+		internalLB:   internalLB,
 		externalIP:   externalIP,
 
 		listeners:    map[uint16]*workTreeListener{},
@@ -153,7 +160,17 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 	}
 
 	slices.SortFunc(ingresses, func(a, b networkingv1.Ingress) int {
-		if diff := GetAnnotation(AnnotationPriority, 0, &b) - GetAnnotation(AnnotationPriority, 0, &a); diff != 0 {
+		// If the priority annotation is invalid, we should not admit that ingress later on.
+		// For sorting, we consider an invalid priority to be zero.
+		prioA, err := GetAnnotation(AnnotationPriority, 0, &a)
+		if err != nil {
+			prioA = 0
+		}
+		prioB, err := GetAnnotation(AnnotationPriority, 0, &b)
+		if err != nil {
+			prioB = 0
+		}
+		if diff := prioB - prioA; diff != 0 {
 			return diff
 		}
 		if diff := a.CreationTimestamp.Compare(b.CreationTimestamp.Time); diff != 0 {
@@ -164,9 +181,38 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 	})
 	for i := range ingresses {
 		ingress := &ingresses[i]
-		httpsOnly := GetAnnotation(AnnotationHTTPSOnly, false, ingress, ingressClass)
-		httpPort := GetAnnotation(AnnotationHTTPPort, 80, ingress, ingressClass)
-		httpsPort := GetAnnotation(AnnotationHTTPSPort, 443, ingress, ingressClass)
+
+		if _, err := GetAnnotation(AnnotationPriority, 0, ingress); err != nil {
+			errors = append(errors, ErrorEvent{
+				Ingress:     ingress,
+				Description: fmt.Sprintf("Invalid priority: %s", err.Error()),
+			})
+			continue
+		}
+		httpsOnly, err := GetAnnotation(AnnotationHTTPSOnly, false, ingress, ingressClass)
+		if err != nil {
+			errors = append(errors, ErrorEvent{
+				Ingress:     ingress,
+				Description: fmt.Sprintf("Failed to parse annotation %s: %s", AnnotationHTTPSOnly, err.Error()),
+			})
+			continue
+		}
+		httpPort, err := GetAnnotation(AnnotationHTTPPort, 80, ingress, ingressClass)
+		if err != nil {
+			errors = append(errors, ErrorEvent{
+				Ingress:     ingress,
+				Description: fmt.Sprintf("Failed to parse annotation %s: %s", AnnotationHTTPPort, err.Error()),
+			})
+			continue
+		}
+		httpsPort, err := GetAnnotation(AnnotationHTTPSPort, 443, ingress, ingressClass)
+		if err != nil {
+			errors = append(errors, ErrorEvent{
+				Ingress:     ingress,
+				Description: fmt.Sprintf("Failed to parse annotation %s: %s", AnnotationHTTPSPort, err.Error()),
+			})
+			continue
+		}
 
 		if !httpsOnly && (httpPort <= 0 || httpPort > math.MaxUint16) {
 			errors = append(errors, ErrorEvent{
@@ -179,6 +225,14 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 			errors = append(errors, ErrorEvent{
 				Ingress:     ingress,
 				Description: "HTTPS port is out of range.",
+			})
+			continue
+		}
+		websocket, err := GetAnnotation(AnnotationWebSocket, false, ingress, ingressClass)
+		if err != nil {
+			errors = append(errors, ErrorEvent{
+				Ingress:     ingress,
+				Description: fmt.Sprintf("Failed to parse annotation %s: %s", AnnotationWebSocket, err.Error()),
 			})
 			continue
 		}
@@ -242,12 +296,12 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 				var httpAdded, httpsAdded bool
 				if !httpsOnly {
 					//nolint:gosec // httpPort is bounds-checked above
-					httpAdded, e = tree.addPath(ingressClass, ingress, rule, ruleIndex, path, pathIndex, uint16(httpPort), albsdk.LISTENERPROTOCOL_PROTOCOL_HTTP)
+					httpAdded, e = tree.addPath(ingress, rule, ruleIndex, path, pathIndex, uint16(httpPort), albsdk.LISTENERPROTOCOL_PROTOCOL_HTTP, websocket)
 					errors = append(errors, e...)
 				}
 				if len(ingress.Spec.TLS) > 0 {
 					//nolint:gosec // httpsPort is bounds-checked above
-					httpsAdded, e = tree.addPath(ingressClass, ingress, rule, ruleIndex, path, pathIndex, uint16(httpsPort), albsdk.LISTENERPROTOCOL_PROTOCOL_HTTPS)
+					httpsAdded, e = tree.addPath(ingress, rule, ruleIndex, path, pathIndex, uint16(httpsPort), albsdk.LISTENERPROTOCOL_PROTOCOL_HTTPS, websocket)
 					errors = append(errors, e...)
 				}
 
@@ -263,7 +317,7 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 }
 
 func parseExternalIP(ingressClass *networkingv1.IngressClass) (string, error) {
-	externalIP := GetAnnotation(AnnotationExternalIP, "", ingressClass)
+	externalIP := ingressClass.Annotations[AnnotationExternalIP]
 	if externalIP != "" {
 		addr, err := netip.ParseAddr(externalIP)
 		if err != nil {
@@ -283,7 +337,10 @@ var servicePlans = []string{
 const defaultServicePlan = "p10"
 
 func parsePlanID(ingressClass *networkingv1.IngressClass) (string, error) {
-	planID := GetAnnotation(AnnotationPlanID, defaultServicePlan, ingressClass)
+	planID := ingressClass.Annotations[AnnotationPlanID]
+	if planID == "" {
+		planID = defaultServicePlan
+	}
 	if !slices.Contains(servicePlans, planID) {
 		return "", fmt.Errorf("invalid plan id %q", planID)
 	}
@@ -291,7 +348,7 @@ func parsePlanID(ingressClass *networkingv1.IngressClass) (string, error) {
 }
 
 func addAccessControlToTree(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass) error {
-	annotation := GetAnnotation(AnnotationAllowedSourceRanges, "", ingressClass)
+	annotation := ingressClass.Annotations[AnnotationAllowedSourceRanges]
 	if annotation == "" {
 		return nil
 	}
@@ -311,9 +368,9 @@ func addAccessControlToTree(tree *WorkTreeALB, ingressClass *networkingv1.Ingres
 // addPath adds the given path to tree under the given port and protocol.
 // It implicitly creates listeners and hosts that don't exist yet in tree.
 func (t *WorkTreeALB) addPath(
-	ingressClass *networkingv1.IngressClass, ingress *networkingv1.Ingress,
+	ingress *networkingv1.Ingress,
 	rule networkingv1.IngressRule, ruleIndex int, path networkingv1.HTTPIngressPath, pathIndex int,
-	port uint16, protocol albsdk.ListenerProtocol,
+	port uint16, protocol albsdk.ListenerProtocol, websocket bool,
 ) (added bool, errors []ErrorEvent) {
 	pathAndType := pathWithType{pathType: ptr.Deref(path.PathType, networkingv1.PathTypeExact), path: path.Path}
 	ingressPathRef := ingressPathReference{namespace: ingress.Namespace, name: ingress.Name, uid: string(ingress.UID), ruleIndex: ruleIndex, pathIndex: pathIndex}
@@ -351,10 +408,11 @@ func (t *WorkTreeALB) addPath(
 		})
 		return false, errors
 	}
+
 	albPath := &workTreePath{
 		path:                 pathAndType,
 		ingressPathReference: ingressPathRef,
-		websocket:            GetAnnotation(AnnotationWebSocket, false, ingress, ingressClass),
+		websocket:            websocket,
 	}
 
 	// We assign listener and host whether they exist or not. If they already exist we assign them to the same pointer.
@@ -455,11 +513,36 @@ func buildTargetPool( //nolint:gocyclo,funlen // TODO: Make function easier?!
 		TargetPort: new(nodePort),
 		Targets:    targets,
 	}
-	targetPool.TlsConfig = &albsdk.TlsConfig{
-		Enabled:                   new(GetAnnotation(AnnotationTargetPoolTLSEnabled, false, &service, ingress, ingressClass)),
-		SkipCertificateValidation: new(GetAnnotation(AnnotationTargetPoolTLSSkipCertificateValidation, false, &service, ingress, ingressClass)),
+
+	tlsEnabled, err := GetAnnotation(AnnotationTargetPoolTLSEnabled, false, &service, ingress, ingressClass)
+	if err != nil {
+		errors = append(errors, ErrorEvent{
+			Ingress:     ingress,
+			Description: fmt.Sprintf("Failed to parse annotation %s: %s", AnnotationTargetPoolTLSEnabled, err.Error()),
+		})
+		return nil, errors
 	}
-	if ca := GetAnnotation(AnnotationTargetPoolTLSCustomCa, "", &service, ingress, ingressClass); ca != "" {
+	skipCertificateValidation, err := GetAnnotation(AnnotationTargetPoolTLSSkipCertificateValidation, false, &service, ingress, ingressClass)
+	if err != nil {
+		errors = append(errors, ErrorEvent{
+			Ingress:     ingress,
+			Description: fmt.Sprintf("Failed to parse annotation %s: %s", AnnotationTargetPoolTLSSkipCertificateValidation, err.Error()),
+		})
+		return nil, errors
+	}
+	targetPool.TlsConfig = &albsdk.TlsConfig{
+		Enabled:                   new(tlsEnabled),
+		SkipCertificateValidation: new(skipCertificateValidation),
+	}
+	ca, err := parseTargetPoolTLSCustomCa(ingressClass, ingress, &service)
+	if err != nil {
+		errors = append(errors, ErrorEvent{
+			Ingress:     ingress,
+			Description: fmt.Sprintf("Failed to parse annotation %s: %s", AnnotationTargetPoolTLSCustomCa, err.Error()),
+		})
+		return nil, errors
+	}
+	if ca != "" {
 		targetPool.TlsConfig.CustomCa = new(ca)
 	}
 	// If externalTrafficPolicy=Cluster we use the default TCP health check on the node port itself.
@@ -489,6 +572,28 @@ func buildTargetPool( //nolint:gocyclo,funlen // TODO: Make function easier?!
 	}
 
 	return targetPool, errors
+}
+
+func parseTargetPoolTLSCustomCa(ingressClass *networkingv1.IngressClass, ingress *networkingv1.Ingress, service *corev1.Service) (string, error) {
+	ca, err := GetAnnotation(AnnotationTargetPoolTLSCustomCa, "", service, ingress, ingressClass)
+	if err != nil {
+		return "", err
+	}
+	if ca == "" {
+		return "", nil
+	}
+	block, _ := pem.Decode([]byte(ca))
+	if block == nil {
+		return "", fmt.Errorf("failed to find PEM block")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse certificate: %w", err)
+	}
+	if !cert.IsCA {
+		return "", fmt.Errorf("certificate is not a CA")
+	}
+	return ca, nil
 }
 
 // ValidateTLSCertAndFingerprint ensures that the private and public are parseable.
