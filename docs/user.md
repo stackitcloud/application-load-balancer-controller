@@ -101,7 +101,7 @@ This functionality integrates seamlessly with tools like cert-manager to automat
 
 By default, standard unencrypted HTTP traffic will still be possible alongside HTTPS to make automated ACME certificate challenges possible. If you want to restrict traffic so the Ingress is not reachable via standard HTTP, you can add the `alb.stackit.cloud/https-only: "true"` annotation to your Ingress or IngressClass resource.
 
-**Important:** Because the ALB selects certificates purely based on Server Name Indication (SNI), a certificate from one Ingress can impact others sharing the same ALB. To prevent unintended certificate serving, ensure your Ingress resources have no overlapping DNS names, use distinct ports, or separate them entirely using distinct IngressClasses.
+**Important:** Because the ALB selects certificates purely based on Server Name Indication (SNI), a certificate from one Ingress can impact others sharing the same ALB. To prevent unintended certificate serving, ensure your Ingress resources have no overlapping DNS names, use distinct ports, or separate them entirely using distinct IngressClasses. For TLS handshakes, the application load balancer prefers exact matches over wildcard certificates. Otherwise, if multiple certificates qualify, which one is used is unspecified.
 
 ```YAML
 apiVersion: networking.k8s.io/v1
