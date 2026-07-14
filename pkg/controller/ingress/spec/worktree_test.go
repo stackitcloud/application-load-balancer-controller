@@ -679,7 +679,7 @@ var _ = Describe("WorkTreeALB", func() {
 		))
 	})
 
-	It("should drop target pools with etp=Local and missing health check port", func() {
+	It("should drop target pools with etp=Local", func() {
 		tree, errs, err := BuildTree(
 			&networkingv1.IngressClass{},
 			[]networkingv1.Ingress{
@@ -702,7 +702,7 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(errs).To(ConsistOf(
 			MatchAllFields(Fields{
 				"Ingress":     testutil.HaveName("ingress-1"),
-				"Description": Equal("Service has externalTrafficPolicy=Local but doesn't have a health check node port. The service must be of type LoadBalancer."),
+				"Description": Equal("Service with externalTrafficPolicy=Local is not supported."),
 				"FieldPath":   Equal(field.NewPath("spec", "rules").Index(0).Child("paths").Index(0).Child("backend", "service")),
 			}),
 		))

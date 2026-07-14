@@ -134,39 +134,6 @@ The field `Ingress.spec.tls.hosts` is ignored by the controller. The ALB takes t
 
 Currently, the STACKIT ALB Ingress controller only supports Kubernetes Service backends. Routing traffic to Resource backends (such as individual Pods or other custom resources) is not supported at this time.
 
-### Optimizing traffic with externalTrafficPolicy
-
-By default, Kubernetes Services use `externalTrafficPolicy: Cluster`. Under this policy, every worker node passes the ALB's health checks because kube-proxy accepts the incoming traffic on any node and automatically routes it over the internal network to a node that is actually running your pod.
-
-However, this setup can cause issues when pods are terminating or nodes are scaling down. Because the ALB relies on passively probing the data port, it only detects failures through connection timeouts. This means the ALB might still send traffic to a node while its pods are actively shutting down, or during the brief window after a node goes down but before the next health probe officially fails. Routing new user requests during this delay results in dropped connections and timeout errors.
-
-To prevent these dropped connections during deployments and cluster downscaling, you can change your Service to use `externalTrafficPolicy: Local`.
-
-**Important:** For this to work, your backend Service must be defined as `type: LoadBalancer`. While Kubernetes technically allows setting `externalTrafficPolicy: Local` on a standard `NodePort` Service, it will not generate the required `healthCheckNodePort`. Additionally, because `type: LoadBalancer` natively triggers the cluster's default Cloud Controller Manager to automatically provision a Network Load Balancer (NLB), you must also specify the `loadBalancerClass` field. This ensures the STACKIT ALB controller takes an ownership of the service and prevents an unwanted NLB from being created.
-
-When correctly configured, Kubernetes exposes a dedicated health check port (healthCheckNodePort) on every node. The STACKIT ALB controller automatically detects this and reconfigures the ALB to probe this health port instead of the standard data port. If a node lacks active pods, or if its pods enter a Terminating state, the health port instantly returns an HTTP 503 error. The ALB registers the failure immediately and pulls the node out of rotation before user connections can be dropped. As an added benefit, this policy also eliminates internal network hops and preserves the client's original IP address.
-
-To enable this behavior, update your backend Service configuration:
-```YAML
-apiVersion: v1
-kind: Service
-metadata:
-  name: service-a
-  namespace: default
-  labels:
-    app: service-a
-spec:
-  type: LoadBalancer
-  loadBalancerClass: alb
-  externalTrafficPolicy: Local
-  ports:
-  - port: 80
-    protocol: TCP
-    targetPort: 80
-  selector:
-    app: service-a
-```
-
 ### Limits
 
 The following limitations are imposed by the STACKIT ALB API:
@@ -210,6 +177,14 @@ Configure the STACKIT Application Load Balancer using the following annotations.
 #### Backend Services must be of type `NodePort`
 
 The controller currently only supports routing traffic to backend Services of `type: NodePort` (or `LoadBalancer`, which also allocates a NodePort). Services of type `ClusterIP` cannot be used as backends because the ALB needs a node-reachable port to forward traffic to.
+
+#### externalTrafficPolicy=Local not supported
+
+Each service that is referenced in an ingress must use the default externalTrafficPolicy=Cluster.
+This is due to the fact that the load balancer is limited to 250 targets.
+However, a Kubernetes cluster can have more than 250 nodes.
+The application load balancer controller drops nodes beyond 250.
+With externalTrafficPolicy=Local, this could cause zero targets to be available.
 
 #### Support for `defaultBackend`
 

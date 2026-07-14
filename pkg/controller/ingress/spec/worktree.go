@@ -545,30 +545,13 @@ func buildTargetPool( //nolint:gocyclo,funlen // TODO: Make function easier?!
 	if ca != "" {
 		targetPool.TlsConfig.CustomCa = new(ca)
 	}
-	// If externalTrafficPolicy=Cluster we use the default TCP health check on the node port itself.
 	if service.Spec.ExternalTrafficPolicy == corev1.ServiceExternalTrafficPolicyLocal {
-		if service.Spec.HealthCheckNodePort == 0 {
-			errors = append(errors, ErrorEvent{
-				Ingress:     ingress,
-				FieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("paths").Index(pathIndex).Child("backend", "service"),
-				Description: "Service has externalTrafficPolicy=Local but doesn't have a health check node port. The service must be of type LoadBalancer.",
-			})
-			return nil, errors
-		}
-		targetPool.ActiveHealthCheck = &albsdk.ActiveHealthCheck{
-			AltPort: &service.Spec.HealthCheckNodePort,
-			HttpHealthChecks: &albsdk.HttpHealthChecks{
-				Path:       new(kubeProxyHealthCheckEndpoint),
-				OkStatuses: []string{kubeProxyExpectedHTTPStatusCode},
-			},
-			// If ActiveHealthCheck is set then all fields in it have to be set.
-			// The fields below are not strictly needed for externalTrafficPolicy=Local.
-			HealthyThreshold:   new(healthCheckHealthyThreshold),
-			Interval:           new(healthCheckInterval),
-			IntervalJitter:     new(healthCheckIntervalJitter),
-			Timeout:            new(healthCheckTimeout),
-			UnhealthyThreshold: new(healthCheckUnhealthyThreshold),
-		}
+		errors = append(errors, ErrorEvent{
+			Ingress:     ingress,
+			FieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("paths").Index(pathIndex).Child("backend", "service"),
+			Description: "Service with externalTrafficPolicy=Local is not supported.",
+		})
+		return nil, errors
 	}
 
 	return targetPool, errors
