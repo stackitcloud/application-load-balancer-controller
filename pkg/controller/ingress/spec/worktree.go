@@ -583,6 +583,10 @@ func ValidateTLSCertAndFingerprint(publicKey, privateKey []byte) (string, error)
 // It filters out nodes that don't qualify as targets.
 // The returned slice is sorted.
 func getTargetsOfNodes(nodes []corev1.Node) []albsdk.Target {
+	slices.SortFunc(nodes, func(a, b corev1.Node) int {
+		return b.CreationTimestamp.Compare(a.CreationTimestamp.Time)
+	})
+
 	targets := []albsdk.Target{}
 	for i := range nodes {
 		node := &nodes[i]
@@ -598,6 +602,9 @@ func getTargetsOfNodes(nodes []corev1.Node) []albsdk.Target {
 				})
 				break
 			}
+		}
+		if len(targets) >= LimitTargetsPerPool {
+			break
 		}
 	}
 	slices.SortFunc(targets, func(a, b albsdk.Target) int {

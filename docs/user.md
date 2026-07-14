@@ -142,8 +142,9 @@ The following limitations are imposed by the STACKIT ALB API:
 
 #### Target limit
 
-A target corresponds directly to a node in your Kubernetes cluster. 
-The number of nodes must not exceed 250.
+A target corresponds directly to a node in your Kubernetes cluster.
+Nodes that are marked for deletion are removed as targets.
+If the remaining nodes exceed 250 then the youngest 250 nodes are used as targets.
 
 #### Target pool limit
 

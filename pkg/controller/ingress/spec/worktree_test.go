@@ -570,7 +570,7 @@ var _ = Describe("WorkTreeALB", func() {
 					WithRule("my-host.local",
 						WithPath("/overwrite-disable-on-ingress", new(networkingv1.PathTypePrefix), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
 					)),
-				Ingress(corev1.NamespaceDefault, "ingress-3", WithUID("uid-3"), WithAnnotation(AnnotationTargetPoolTLSCustomCa, "custom-ca"),
+				Ingress(corev1.NamespaceDefault, "ingress-3", WithUID("uid-3"), WithAnnotation(AnnotationTargetPoolTLSCustomCa, testdata.FixtureTLS1PublicKey),
 					WithRule("my-host.local",
 						WithPath("/custom-ca", new(networkingv1.PathTypePrefix), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
 					)),
@@ -594,7 +594,7 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(create.TargetPools[0].TlsConfig.Enabled).To(HaveValue(BeTrue()))
 		Expect(create.TargetPools[1].TlsConfig.Enabled).To(HaveValue(BeFalse()))
 		Expect(create.TargetPools[2].TlsConfig.Enabled).To(HaveValue(BeFalse()))
-		Expect(create.TargetPools[3].TlsConfig.CustomCa).To(HaveValue(Equal("custom-ca")))
+		Expect(create.TargetPools[3].TlsConfig.CustomCa).To(HaveValue(Equal(testdata.FixtureTLS1PublicKey)))
 		Expect(create.TargetPools[4].TlsConfig.SkipCertificateValidation).To(HaveValue(BeTrue()))
 	})
 
@@ -786,6 +786,73 @@ var _ = Describe("WorkTreeALB", func() {
 				Ip:          new("10.0.0.1"),
 			},
 		))
+	})
+
+	It("should filter out oldest nodes beyond 250", func() {
+		// The first node doesn't qualify and should be skipped. Out of the other 251, the first one should be dropped.
+		nodes := []corev1.Node{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node-with-tobedeleted-taint",
+				},
+				Spec: corev1.NodeSpec{
+					Taints: []corev1.Taint{
+						{
+							Key: TaintToBeDeleted,
+						},
+					},
+				},
+				Status: corev1.NodeStatus{
+					Addresses: []corev1.NodeAddress{
+						{
+							Type:    corev1.NodeInternalIP,
+							Address: "10.5.0.1",
+						},
+					},
+				},
+			},
+		}
+
+		for i := range 251 {
+			// Higher i means younger node.
+			nodes = append(nodes, corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              fmt.Sprintf("node-%d", i+1),
+					CreationTimestamp: metav1.NewTime(time.Unix(100000, 0).Add(time.Duration(i) * time.Hour)),
+				},
+				Status: corev1.NodeStatus{
+					Addresses: []corev1.NodeAddress{
+						{
+							Type:    corev1.NodeInternalIP,
+							Address: fmt.Sprintf("10.0.0.%d", i+1),
+						},
+					},
+				},
+			})
+		}
+
+		tree, errs, err := BuildTree(
+			&networkingv1.IngressClass{},
+			[]networkingv1.Ingress{
+				Ingress(corev1.NamespaceDefault, "ingress-1", WithRule("my-host.local",
+					WithPath("/", new(networkingv1.PathTypePrefix), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
+				)),
+			},
+			nil,
+			[]corev1.Service{
+				Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 80, 30000, corev1.ProtocolTCP)),
+			}, nodes, nil,
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(errs).To(BeEmpty())
+
+		create := tree.ToCreatePayload(nil, "network-id", "region")
+		Expect(create.TargetPools).To(HaveLen(1))
+		Expect(create.TargetPools[0].Targets).To(HaveLen(250))
+		Expect(create.TargetPools[0].Targets).To(HaveEach(MatchFields(IgnoreExtras, Fields{
+			"DisplayName": HaveValue(And(Not(Equal("node-1")), ContainSubstring("node-"))),
+			"Ip":          HaveValue(And(Not(Equal("10.0.0.1")), Not(Equal("10.5.0.1")), ContainSubstring("10.0.0."))),
+		})))
 	})
 
 	It("should have all slices ordered consistently", func() {
