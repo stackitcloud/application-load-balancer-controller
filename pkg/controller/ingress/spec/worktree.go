@@ -423,17 +423,6 @@ func (t *WorkTreeALB) addPath(
 	return true, errors
 }
 
-const (
-	kubeProxyHealthCheckEndpoint    = "/healthz"
-	kubeProxyExpectedHTTPStatusCode = "200"
-
-	healthCheckHealthyThreshold   int32 = 1
-	healthCheckInterval                 = "5s"
-	healthCheckIntervalJitter           = "1s"
-	healthCheckTimeout                  = "3s"
-	healthCheckUnhealthyThreshold int32 = 3
-)
-
 // buildTargetPool builds a target pool for the provided path.
 // It uses tree to validate the returned target pool against the existing state.
 //
