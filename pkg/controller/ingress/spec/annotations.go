@@ -1,6 +1,7 @@
 package spec
 
 import (
+	"fmt"
 	"strconv"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -106,7 +107,7 @@ func GetAnnotation[T any](annotation string, defaultValue T, objects ...client.O
 	case bool:
 		result, err = strconv.ParseBool(rawVal)
 	default:
-		panic("Invalid type T for GetAnnotation")
+		return defaultValue, fmt.Errorf("invalid type for GetAnnotation")
 	}
 
 	if err != nil {
