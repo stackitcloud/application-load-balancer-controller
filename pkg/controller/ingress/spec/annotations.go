@@ -11,6 +11,7 @@ const (
 	// Currently, the only support value is "NodePort".
 	// Must be set on IngressClass.
 	AnnotationNetworkMode = "alb.stackit.cloud/network-mode"
+	NetworkModeNodePort   = "NodePort"
 
 	// AnnotationExternalIP references a STACKIT public IP that should be used by the application load balancer.
 	// If set it will be used instead of an ephemeral IP. The IP must be created by the customer. When the service is deleted,

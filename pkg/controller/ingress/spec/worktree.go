@@ -127,6 +127,10 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 
 	targets := getTargetsOfNodes(nodes)
 
+	if err := parseNetworkMode(ingressClass); err != nil {
+		return nil, nil, err
+	}
+
 	externalIP, err := parseExternalIP(ingressClass)
 	if err != nil {
 		return nil, nil, err
@@ -314,6 +318,14 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 	}
 
 	return tree, errors, nil
+}
+
+func parseNetworkMode(ingressClass *networkingv1.IngressClass) error {
+	networkMode := ingressClass.Annotations[AnnotationNetworkMode]
+	if networkMode != NetworkModeNodePort {
+		return fmt.Errorf("annotation %s must be set to %s", AnnotationNetworkMode, NetworkModeNodePort)
+	}
+	return nil
 }
 
 func parseExternalIP(ingressClass *networkingv1.IngressClass) (string, error) {

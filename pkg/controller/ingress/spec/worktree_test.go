@@ -22,7 +22,13 @@ import (
 
 var _ = Describe("WorkTreeALB", func() {
 	It("should sort rules from most to least-specific even if their priority is inversed", func() {
-		tree, errs, err := BuildTree(&networkingv1.IngressClass{}, []networkingv1.Ingress{
+		tree, errs, err := BuildTree(&networkingv1.IngressClass{
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{
+					AnnotationNetworkMode: NetworkModeNodePort,
+				},
+			},
+		}, []networkingv1.Ingress{
 			Ingress(
 				"default", "ingress-with-higher-priority",
 				WithAnnotation(AnnotationPriority, "5"),
@@ -66,7 +72,13 @@ var _ = Describe("WorkTreeALB", func() {
 
 	It("should match rules against correct node ports", func() {
 		const host = "my-host.local"
-		tree, errs, err := BuildTree(&networkingv1.IngressClass{}, []networkingv1.Ingress{
+		tree, errs, err := BuildTree(&networkingv1.IngressClass{
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{
+					AnnotationNetworkMode: NetworkModeNodePort,
+				},
+			},
+		}, []networkingv1.Ingress{
 			Ingress(
 				"default", "ingress-to-node-port-5000", WithUID("uid-1"),
 				WithRule(host, WithPath("/5000", new(networkingv1.PathTypeExact), "service-a", networkingv1.ServiceBackendPort{Number: 1337})),
@@ -120,7 +132,13 @@ var _ = Describe("WorkTreeALB", func() {
 
 	It("should not expose ingress on HTTP if configured HTTPS-only", func() {
 		tree, errs, err := BuildTree(
-			&networkingv1.IngressClass{},
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationNetworkMode: NetworkModeNodePort,
+					},
+				},
+			},
 			[]networkingv1.Ingress{
 				Ingress(corev1.NamespaceDefault, "ingress",
 					WithAnnotation(AnnotationHTTPSOnly, "true"), WithTLSSecret("my-cert"),
@@ -148,7 +166,13 @@ var _ = Describe("WorkTreeALB", func() {
 
 	It("should return an error when the TLS secret doesn't exist", func() {
 		tree, errs, err := BuildTree(
-			&networkingv1.IngressClass{},
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationNetworkMode: NetworkModeNodePort,
+					},
+				},
+			},
 			[]networkingv1.Ingress{
 				Ingress(corev1.NamespaceDefault, "ingress-with-tls-secret-reference", WithTLSSecret("doesnt-exist"), WithRule("my-host.local", WithPath(
 					"/", new(networkingv1.PathTypePrefix), "my-service", networkingv1.ServiceBackendPort{Number: 80},
@@ -182,7 +206,13 @@ var _ = Describe("WorkTreeALB", func() {
 
 	It("should return an error when the TLS secret isn't of type TLS", func() {
 		_, errs, err := BuildTree(
-			&networkingv1.IngressClass{},
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationNetworkMode: NetworkModeNodePort,
+					},
+				},
+			},
 			[]networkingv1.Ingress{
 				Ingress(corev1.NamespaceDefault, "ingress-with-tls-secret-reference", WithTLSSecret("non-tls")),
 			},
@@ -206,7 +236,13 @@ var _ = Describe("WorkTreeALB", func() {
 
 	It("should return an error when TLS secret parsing fails", func() {
 		_, errs, err := BuildTree(
-			&networkingv1.IngressClass{},
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationNetworkMode: NetworkModeNodePort,
+					},
+				},
+			},
 			[]networkingv1.Ingress{
 				Ingress(corev1.NamespaceDefault, "ingress-with-tls-secret-reference", WithTLSSecret("invalid-tls")),
 			},
@@ -234,7 +270,13 @@ var _ = Describe("WorkTreeALB", func() {
 
 	It("should process TLS secret correctly and return it as missing certificate", func() {
 		tree, errs, err := BuildTree(
-			&networkingv1.IngressClass{},
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationNetworkMode: NetworkModeNodePort,
+					},
+				},
+			},
 			[]networkingv1.Ingress{
 				Ingress(corev1.NamespaceDefault, "ingress-with-tls-secret-reference", WithTLSSecret("my-tls")),
 			},
@@ -262,7 +304,13 @@ var _ = Describe("WorkTreeALB", func() {
 	})
 
 	It("should return unused certificates that are no longer used by the ALB", func() {
-		tree, errs, err := BuildTree(&networkingv1.IngressClass{}, []networkingv1.Ingress{
+		tree, errs, err := BuildTree(&networkingv1.IngressClass{
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{
+					AnnotationNetworkMode: NetworkModeNodePort,
+				},
+			},
+		}, []networkingv1.Ingress{
 			Ingress(corev1.NamespaceDefault, "ingress-with-tls-secret-reference", WithTLSSecret("my-tls")),
 		}, []corev1.Secret{
 			{
@@ -290,7 +338,7 @@ var _ = Describe("WorkTreeALB", func() {
 	It("should use TLS certificates only on ports that reference it", func() {
 		tree, errs, err := BuildTree(
 			&networkingv1.IngressClass{
-				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{AnnotationHTTPSOnly: "true"}},
+				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{AnnotationNetworkMode: NetworkModeNodePort, AnnotationHTTPSOnly: "true"}},
 			},
 			[]networkingv1.Ingress{
 				Ingress(corev1.NamespaceDefault, "ingress-a", WithTLSSecret("shared-cert"), WithTLSSecret("cert-for-a"),
@@ -355,7 +403,8 @@ var _ = Describe("WorkTreeALB", func() {
 			&networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						AnnotationWebSocket: "true",
+						AnnotationNetworkMode: NetworkModeNodePort,
+						AnnotationWebSocket:   "true",
 					},
 				},
 			},
@@ -387,7 +436,13 @@ var _ = Describe("WorkTreeALB", func() {
 
 	It("should enable websocket if enable on ingress", func() {
 		tree, errs, err := BuildTree(
-			&networkingv1.IngressClass{},
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationNetworkMode: NetworkModeNodePort,
+					},
+				},
+			},
 			[]networkingv1.Ingress{
 				Ingress(corev1.NamespaceDefault, "ingress-1", WithRule("my-host.local",
 					WithPath("/a", new(networkingv1.PathTypePrefix), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
@@ -419,7 +474,8 @@ var _ = Describe("WorkTreeALB", func() {
 			&networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						AnnotationWAFName: "my-waf",
+						AnnotationNetworkMode: NetworkModeNodePort,
+						AnnotationWAFName:     "my-waf",
 					},
 				},
 			},
@@ -450,6 +506,7 @@ var _ = Describe("WorkTreeALB", func() {
 			&networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
+						AnnotationNetworkMode:         NetworkModeNodePort,
 						AnnotationAllowedSourceRanges: "10.0.0.0/24,1.2.3.4/32",
 					},
 				},
@@ -467,7 +524,8 @@ var _ = Describe("WorkTreeALB", func() {
 			&networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						AnnotationInternal: "true",
+						AnnotationNetworkMode: NetworkModeNodePort,
+						AnnotationInternal:    "true",
 					},
 				},
 			}, nil, nil, nil, nil, nil,
@@ -485,7 +543,8 @@ var _ = Describe("WorkTreeALB", func() {
 			&networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						AnnotationExternalIP: "1.2.3.4",
+						AnnotationNetworkMode: NetworkModeNodePort,
+						AnnotationExternalIP:  "1.2.3.4",
 					},
 				},
 			}, nil, nil, nil, nil, nil,
@@ -522,7 +581,13 @@ var _ = Describe("WorkTreeALB", func() {
 			}
 		}
 		_, errs, err := BuildTree(
-			&networkingv1.IngressClass{}, ingresses, nil, []corev1.Service{
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationNetworkMode: NetworkModeNodePort,
+					},
+				},
+			}, ingresses, nil, []corev1.Service{
 				Service(corev1.NamespaceDefault, "my-service", WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 80, 30000, corev1.ProtocolTCP)),
 			}, nil, nil,
 		)
@@ -557,6 +622,7 @@ var _ = Describe("WorkTreeALB", func() {
 			&networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
+						AnnotationNetworkMode:          NetworkModeNodePort,
 						AnnotationTargetPoolTLSEnabled: "true",
 					},
 				},
@@ -600,7 +666,13 @@ var _ = Describe("WorkTreeALB", func() {
 
 	It("should use the log configuration from the existing load balancer", func() {
 		tree, errs, err := BuildTree(
-			&networkingv1.IngressClass{}, nil, nil, nil, nil, &v2api.LoadBalancer{
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationNetworkMode: NetworkModeNodePort,
+					},
+				},
+			}, nil, nil, nil, nil, &v2api.LoadBalancer{
 				Options: &v2api.LoadBalancerOptions{
 					Observability: &v2api.LoadbalancerOptionObservability{
 						Logs: &v2api.LoadbalancerOptionLogs{
@@ -621,7 +693,13 @@ var _ = Describe("WorkTreeALB", func() {
 
 	It("should use the version from the existing load balancer in update payload", func() {
 		tree, errs, err := BuildTree(
-			&networkingv1.IngressClass{}, nil, nil, nil, nil, &v2api.LoadBalancer{
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationNetworkMode: NetworkModeNodePort,
+					},
+				},
+			}, nil, nil, nil, nil, &v2api.LoadBalancer{
 				Version: new("current-version"),
 			},
 		)
@@ -634,7 +712,13 @@ var _ = Describe("WorkTreeALB", func() {
 
 	It("should turn implementation-specific paths into exact matchers", func() {
 		tree, errs, err := BuildTree(
-			&networkingv1.IngressClass{},
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationNetworkMode: NetworkModeNodePort,
+					},
+				},
+			},
 			[]networkingv1.Ingress{
 				Ingress(corev1.NamespaceDefault, "ingress-1", WithRule("my-host.local",
 					WithPath("/a", new(networkingv1.PathTypeImplementationSpecific), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
@@ -654,7 +738,13 @@ var _ = Describe("WorkTreeALB", func() {
 
 	It("should return an error on duplicate paths", func() {
 		_, errs, err := BuildTree(
-			&networkingv1.IngressClass{},
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationNetworkMode: NetworkModeNodePort,
+					},
+				},
+			},
 			[]networkingv1.Ingress{
 				Ingress(corev1.NamespaceDefault, "ingress-1", WithRule("my-host.local",
 					WithPath("/", new(networkingv1.PathTypePrefix), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
@@ -681,7 +771,13 @@ var _ = Describe("WorkTreeALB", func() {
 
 	It("should drop target pools with etp=Local", func() {
 		tree, errs, err := BuildTree(
-			&networkingv1.IngressClass{},
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationNetworkMode: NetworkModeNodePort,
+					},
+				},
+			},
 			[]networkingv1.Ingress{
 				Ingress(corev1.NamespaceDefault, "ingress-1", WithRule("my-host.local",
 					WithPath("/", new(networkingv1.PathTypePrefix), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
@@ -711,7 +807,13 @@ var _ = Describe("WorkTreeALB", func() {
 
 	It("should filter out nodes that don't meet the criteria to serve traffic", func() {
 		tree, errs, err := BuildTree(
-			&networkingv1.IngressClass{},
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationNetworkMode: NetworkModeNodePort,
+					},
+				},
+			},
 			[]networkingv1.Ingress{
 				Ingress(corev1.NamespaceDefault, "ingress-1", WithRule("my-host.local",
 					WithPath("/", new(networkingv1.PathTypePrefix), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
@@ -832,7 +934,13 @@ var _ = Describe("WorkTreeALB", func() {
 		}
 
 		tree, errs, err := BuildTree(
-			&networkingv1.IngressClass{},
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationNetworkMode: NetworkModeNodePort,
+					},
+				},
+			},
 			[]networkingv1.Ingress{
 				Ingress(corev1.NamespaceDefault, "ingress-1", WithRule("my-host.local",
 					WithPath("/", new(networkingv1.PathTypePrefix), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
@@ -857,7 +965,13 @@ var _ = Describe("WorkTreeALB", func() {
 
 	It("should have all slices ordered consistently", func() {
 		tree, errs, err := BuildTree(
-			&networkingv1.IngressClass{},
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationNetworkMode: NetworkModeNodePort,
+					},
+				},
+			},
 			[]networkingv1.Ingress{
 				Ingress(corev1.NamespaceDefault, "ingress-1", WithUID("ingress-1-uid"), WithRule("b.local",
 					WithPath("/", new(networkingv1.PathTypePrefix), "service-b", networkingv1.ServiceBackendPort{Number: 80}),
@@ -962,7 +1076,8 @@ var _ = Describe("WorkTreeALB", func() {
 			&networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						AnnotationHTTPSPort: "-3",
+						AnnotationNetworkMode: NetworkModeNodePort,
+						AnnotationHTTPSPort:   "-3",
 					},
 				},
 			},
@@ -1004,7 +1119,8 @@ var _ = Describe("WorkTreeALB", func() {
 			&networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						AnnotationHTTPPort: "70000",
+						AnnotationNetworkMode: NetworkModeNodePort,
+						AnnotationHTTPPort:    "70000",
 					},
 				},
 			},
@@ -1037,7 +1153,8 @@ var _ = Describe("WorkTreeALB", func() {
 			&networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						key: value,
+						AnnotationNetworkMode: NetworkModeNodePort,
+						key:                   value,
 					},
 				},
 			}, nil, nil, nil, nil, nil,
@@ -1069,7 +1186,13 @@ var _ = Describe("WorkTreeALB", func() {
 
 	DescribeTable("parsing ingress annotation", func(key, value, expectErr string) {
 		_, errs, err := BuildTree(
-			&networkingv1.IngressClass{},
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationNetworkMode: NetworkModeNodePort,
+					},
+				},
+			},
 			[]networkingv1.Ingress{
 				Ingress("default", "ingress", WithAnnotation(key, value), WithRule("my-host.local",
 					WithPath("/inherit", new(networkingv1.PathTypePrefix), "my-service", networkingv1.ServiceBackendPort{Number: 80})),
@@ -1103,4 +1226,11 @@ var _ = Describe("WorkTreeALB", func() {
 		Entry("priority - negative", AnnotationPriority, "-2", ""),
 		Entry("priority - no number", AnnotationPriority, "maybe", `Invalid priority: strconv.Atoi: parsing "maybe": invalid syntax`),
 	)
+
+	It("should error when network mode is not specified", func() {
+		_, _, err := BuildTree(
+			&networkingv1.IngressClass{}, nil, nil, nil, nil, nil,
+		)
+		Expect(err).To(MatchError("annotation alb.stackit.cloud/network-mode must be set to NodePort"))
+	})
 })

@@ -151,6 +151,9 @@ var _ = Describe("IngressClassController", func() {
 		ingressClass := &networkingv1.IngressClass{
 			ObjectMeta: metav1.ObjectMeta{
 				GenerateName: "managed-ingressclass-",
+				Annotations: map[string]string{
+					spec.AnnotationNetworkMode: spec.NetworkModeNodePort,
+				},
 			},
 			Spec: networkingv1.IngressClassSpec{
 				Controller: controllerName,
@@ -170,13 +173,16 @@ var _ = Describe("IngressClassController", func() {
 	})
 
 	// The ALB is already created when BeforeEach completes.
-	Context("with IngressClass matching the controller and no annotations", func() {
+	Context("with IngressClass matching the controller and only the required network-mode annotation", func() {
 		var ingressClass *networkingv1.IngressClass
 
 		BeforeEach(func(ctx context.Context) {
 			ingressClass = &networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{
 					GenerateName: "ingressclass-",
+					Annotations: map[string]string{
+						spec.AnnotationNetworkMode: spec.NetworkModeNodePort,
+					},
 				},
 				Spec: networkingv1.IngressClassSpec{
 					Controller: controllerName,
@@ -407,7 +413,8 @@ var _ = Describe("IngressClassController", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				GenerateName: "ingressclass-",
 				Annotations: map[string]string{
-					spec.AnnotationInternal: "true",
+					spec.AnnotationNetworkMode: spec.NetworkModeNodePort,
+					spec.AnnotationInternal:    "true",
 				},
 			},
 			Spec: networkingv1.IngressClassSpec{
@@ -456,7 +463,8 @@ var _ = Describe("IngressClassController", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				GenerateName: "ingressclass-",
 				Annotations: map[string]string{
-					spec.AnnotationExternalIP: "not-valid",
+					spec.AnnotationNetworkMode: spec.NetworkModeNodePort,
+					spec.AnnotationExternalIP:  "not-valid",
 				},
 			},
 			Spec: networkingv1.IngressClassSpec{
