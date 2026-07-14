@@ -1174,6 +1174,7 @@ var _ = Describe("WorkTreeALB", func() {
 		Entry("plan ID - valid", AnnotationPlanID, "p10", ""),
 		Entry("plan ID - invalid", AnnotationPlanID, "p1337", `invalid plan id "p1337"`),
 		Entry("allowed source range - valid", AnnotationAllowedSourceRanges, "10.0.0.0/24", ""),
+		Entry("allowed source range - valid list", AnnotationAllowedSourceRanges, "10.0.0.0/24,10.5.0.0/8", ""),
 		Entry("allowed source range - invalid", AnnotationAllowedSourceRanges, "10.0.0.0/24,invalid-range",
 			`IP range 1 is invalid: invalid CIDR address: invalid-range`),
 		Entry("allowed source range - invalid subnet", AnnotationAllowedSourceRanges, "10.0.0.0/24,10.1.0.0/46",
