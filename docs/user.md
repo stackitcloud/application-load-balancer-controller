@@ -189,7 +189,9 @@ With externalTrafficPolicy=Local, this could cause zero targets to be available.
 
 #### Support for `defaultBackend`
 
-The ALB Ingress Controller currently does not support the `defaultBackend` field on Ingress resources. Customers should avoid relying on this feature as it will be ignored during ALB reconciliation.
+The application load balancer controller currently does not support the `defaultBackend` field on Ingress resources.
+Customers should avoid relying on this feature as that field will be ignored during ALB reconciliation.
+This implies that ingresses that contain rules but no paths will also be ignored.
 
 #### Dummy listener for empty application load balancers
 
