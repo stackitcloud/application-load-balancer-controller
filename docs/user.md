@@ -159,8 +159,8 @@ Configure the STACKIT Application Load Balancer using the following annotations.
 | Annotation | Type | Allowed On | Requirement | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | `alb.stackit.cloud/network-mode` | String | IngressClass | Mandatory | Routing mode (currently only `NodePort` supported). |
-| `alb.stackit.cloud/external-address` | String | IngressClass | Optional | Uses a specific STACKIT floating IP instead of an ephemeral one. |
-| `alb.stackit.cloud/internal` | Boolean | IngressClass | Optional | If `true`, the ALB is not exposed via a public IP. |
+| `alb.stackit.cloud/external-address` | String | IngressClass | Optional | Uses a specific STACKIT public IP instead of an ephemeral one. After creation, can only be set to the ephemeral public it has already assigned. If the annotation is present, the public IP will not be deleted during ingress class deletion. |
+| `alb.stackit.cloud/internal` | Boolean | IngressClass | Optional | If `true`, the ALB is not exposed via a public IP. Cannot be changed after creation. |
 | `alb.stackit.cloud/plan-id` | String | IngressClass | Optional | Sets the service plan for the ALB. |
 | `alb.stackit.cloud/priority` | Integer | Ingress | Optional | Defines the evaluation priority of the Ingress. Higher number takes priority. Defaults to zero. |
 | `alb.stackit.cloud/web-application-firewall-name` | String | IngressClass | Optional | Attaches a STACKIT WAF configuration to the listeners. |
