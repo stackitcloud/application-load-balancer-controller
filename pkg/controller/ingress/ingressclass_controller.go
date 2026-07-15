@@ -112,7 +112,7 @@ func (r *IngressClassReconciler) updateStatus(
 	}
 
 	if albIP == "" {
-		return ctrl.Result{}, fmt.Errorf("alb is ready but has no IPs %v", alb.Name)
+		return ctrl.Result{}, fmt.Errorf("alb %s is ready but has no IPs", ptr.Deref(alb.Name, ""))
 	}
 
 	ingresses, err := r.getIngressesForIngressClass(ctx, ingressClass)
