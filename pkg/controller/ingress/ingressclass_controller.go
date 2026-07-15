@@ -157,24 +157,8 @@ func (r *IngressClassReconciler) handleIngressClassDeletion(
 	ctx context.Context,
 	ingressClass *networkingv1.IngressClass,
 ) (ctrl.Result, error) {
-	ingresses, err := r.getIngressesForIngressClass(ctx, ingressClass)
-	if err != nil {
+	if err := r.wipeIngressStatus(ctx, ingressClass); err != nil {
 		return ctrl.Result{}, err
-	}
-
-	for i := range ingresses {
-		ingress := &ingresses[i]
-		before := ingress.DeepCopy()
-
-		ingress.Status.LoadBalancer.Ingress = []networkingv1.IngressLoadBalancerIngress{}
-
-		if apiequality.Semantic.DeepEqual(before, ingress) {
-			continue
-		}
-		patch := client.MergeFrom(before)
-		if err := r.Client.Status().Patch(ctx, ingress, patch); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to patch ingress %s: %w", client.ObjectKeyFromObject(ingress), err)
-		}
 	}
 
 	alb, err := r.ALBClient.GetLoadBalancer(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region, spec.LoadBalancerName(ingressClass))
@@ -191,7 +175,8 @@ func (r *IngressClassReconciler) handleIngressClassDeletion(
 		return ctrl.Result{RequeueAfter: deletedRequeueInterval}, nil
 	}
 	if !stackit.IsNotFound(err) {
-		r.Recorder.Eventf(ingressClass, nil, corev1.EventTypeNormal, "WaitingForDeletion", "DeletingALB", "Waiting for ALB to be deleted before removing referenced certificates.")
+		r.Recorder.Eventf(ingressClass, nil, corev1.EventTypeNormal, "WaitingForDeletion", "DeletingALB",
+			"Waiting for ALB to be deleted before removing referenced certificates.")
 		return ctrl.Result{RequeueAfter: deletedRequeueInterval}, nil
 	}
 
@@ -216,6 +201,29 @@ func (r *IngressClassReconciler) handleIngressClassDeletion(
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *IngressClassReconciler) wipeIngressStatus(ctx context.Context, ingressClass *networkingv1.IngressClass) error {
+	ingresses, err := r.getIngressesForIngressClass(ctx, ingressClass)
+	if err != nil {
+		return err
+	}
+
+	for i := range ingresses {
+		ingress := &ingresses[i]
+		before := ingress.DeepCopy()
+
+		ingress.Status.LoadBalancer.Ingress = []networkingv1.IngressLoadBalancerIngress{}
+
+		if apiequality.Semantic.DeepEqual(before, ingress) {
+			continue
+		}
+		patch := client.MergeFrom(before)
+		if err := r.Client.Status().Patch(ctx, ingress, patch); err != nil {
+			return fmt.Errorf("failed to patch ingress %s: %w", client.ObjectKeyFromObject(ingress), err)
+		}
+	}
+	return nil
 }
 
 // reconcileALBResources reconciles all reconciles STACKIT resources for the ingress class.
