@@ -28,6 +28,11 @@ const (
 	finalizerName = "stackit.cloud/alb-ingress"
 	// controllerName is the name of the ALB controller that the IngressClass should point to for reconciliation
 	controllerName = "stackit.cloud/alb-ingress"
+
+	// readyRequeueInterval defines how often the controller should check for the ALB to become ready.
+	readyRequeueInterval = 10 * time.Second
+	// deletedRequeueInterval defines how often the controller should for the ALB to get deleted.
+	deletedRequeueInterval = 10 * time.Second
 )
 
 // IngressClassReconciler reconciles a IngressClass object
@@ -56,11 +61,11 @@ func (r *IngressClassReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	log.V(2).Info("Reconciling IngressClass")
 
 	if !ingressClass.DeletionTimestamp.IsZero() {
-		err := r.handleIngressClassDeletion(ctx, ingressClass)
+		res, err := r.handleIngressClassDeletion(ctx, ingressClass)
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to handle IngressClass deletion: %w", err)
 		}
-		return ctrl.Result{}, nil
+		return res, nil
 	}
 
 	// Add finalizer to the IngressClass if not already added.
@@ -95,7 +100,7 @@ func (r *IngressClassReconciler) updateStatus(
 	if alb.Status == nil || *alb.Status != albsdk.LOADBALANCERSTATUS_STATUS_READY {
 		r.Recorder.Eventf(ingressClass, nil, corev1.EventTypeNormal, "AlbNotReady", "Reconciling", "ALB is in status %q", ptr.Deref(alb.Status, "unknown"))
 		// ALB is not yet ready, requeue
-		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		return ctrl.Result{RequeueAfter: readyRequeueInterval}, nil
 	}
 
 	var albIP string
@@ -151,10 +156,10 @@ func (r *IngressClassReconciler) getIngressesForIngressClass(ctx context.Context
 func (r *IngressClassReconciler) handleIngressClassDeletion(
 	ctx context.Context,
 	ingressClass *networkingv1.IngressClass,
-) error {
+) (ctrl.Result, error) {
 	ingresses, err := r.getIngressesForIngressClass(ctx, ingressClass)
 	if err != nil {
-		return err
+		return ctrl.Result{}, err
 	}
 
 	for i := range ingresses {
@@ -168,27 +173,36 @@ func (r *IngressClassReconciler) handleIngressClassDeletion(
 		}
 		patch := client.MergeFrom(before)
 		if err := r.Client.Status().Patch(ctx, ingress, patch); err != nil {
-			return fmt.Errorf("failed to patch ingress %s: %w", client.ObjectKeyFromObject(ingress), err)
+			return ctrl.Result{}, fmt.Errorf("failed to patch ingress %s: %w", client.ObjectKeyFromObject(ingress), err)
 		}
 	}
 
-	// The API returns 200 if the load balancer doesn't exist.
-	err = r.ALBClient.DeleteLoadBalancer(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region, spec.LoadBalancerName(ingressClass))
-	if err != nil {
-		return fmt.Errorf("failed to delete load balancer: %w", err)
+	alb, err := r.ALBClient.GetLoadBalancer(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region, spec.LoadBalancerName(ingressClass))
+	if err != nil && !stackit.IsNotFound(err) {
+		return ctrl.Result{}, fmt.Errorf("failed to get ALB from API: %w", err)
 	}
-	ctrl.LoggerFrom(ctx).Info("Deleted load balancer")
-
-	// TODO: Wait for load balancer to be deleted or remove all certificates references to delete certificates without errors.
+	if !stackit.IsNotFound(err) && ptr.Deref(alb.Status, "") != albsdk.LOADBALANCERSTATUS_STATUS_TERMINATING {
+		// The API returns 200 if the load balancer doesn't exist.
+		err = r.ALBClient.DeleteLoadBalancer(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region, spec.LoadBalancerName(ingressClass))
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to delete load balancer: %w", err)
+		}
+		ctrl.LoggerFrom(ctx).Info("Deleted load balancer. Waiting for it to be deleted.")
+		return ctrl.Result{RequeueAfter: deletedRequeueInterval}, nil
+	}
+	if !stackit.IsNotFound(err) {
+		r.Recorder.Eventf(ingressClass, nil, corev1.EventTypeNormal, "WaitingForDeletion", "DeletingALB", "Waiting for ALB to be deleted before removing referenced certificates.")
+		return ctrl.Result{RequeueAfter: deletedRequeueInterval}, nil
+	}
 
 	ingressClassCertificates, err := r.getCertificatesForIngressClass(ctx, ingressClass)
 	if err != nil {
-		return err
+		return ctrl.Result{}, err
 	}
 	for i := range ingressClassCertificates {
 		cert := &ingressClassCertificates[i]
 		if err := r.CertificateClient.DeleteCertificate(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region, *cert.Id); err != nil {
-			return fmt.Errorf("failed to delete certificate %q: %w", *cert.Id, err)
+			return ctrl.Result{}, fmt.Errorf("failed to delete certificate %q: %w", *cert.Id, err)
 		}
 		ctrl.LoggerFrom(ctx).Info("Deleted certificate", "id", *cert.Id, "name", *cert.Name)
 	}
@@ -196,12 +210,12 @@ func (r *IngressClassReconciler) handleIngressClassDeletion(
 	if controllerutil.RemoveFinalizer(ingressClass, finalizerName) {
 		err = r.Client.Update(ctx, ingressClass)
 		if err != nil {
-			return fmt.Errorf("failed to remove finalizer from IngressClass: %w", err)
+			return ctrl.Result{}, fmt.Errorf("failed to remove finalizer from IngressClass: %w", err)
 		}
 		ctrl.LoggerFrom(ctx).Info("Removed finalizer")
 	}
 
-	return nil
+	return ctrl.Result{}, nil
 }
 
 // reconcileALBResources reconciles all reconciles STACKIT resources for the ingress class.
