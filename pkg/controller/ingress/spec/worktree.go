@@ -274,6 +274,15 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 			tree.certificates[CertificateFingerprint(fingerprint)].Ports[uint16(httpsPort)] = nil //nolint:gosec // httpsPort is bounds-checked above
 		}
 
+		if len(ingress.Spec.TLS) == 0 && httpsOnly {
+			errors = append(errors, ErrorEvent{
+				Ingress:     ingress,
+				FieldPath:   field.NewPath("spec", "tls"),
+				Description: "ingress is HTTPS-only but has zero certificates. Skipping ingress.",
+			})
+			continue
+		}
+
 		for ruleIndex, rule := range ingress.Spec.Rules {
 			// TODO: support rules that don't have a path
 			if rule.HTTP == nil {
@@ -293,12 +302,12 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 
 				var httpAdded, httpsAdded bool
 				if !httpsOnly {
-					//nolint:gosec // httpPort is bounds-checked above
+					//nolint:gosec // httpPort is bound-checked above
 					httpAdded, e = tree.addPath(ingress, rule, ruleIndex, path, pathIndex, uint16(httpPort), albsdk.LISTENERPROTOCOL_PROTOCOL_HTTP, websocket)
 					errors = append(errors, e...)
 				}
 				if len(ingress.Spec.TLS) > 0 {
-					//nolint:gosec // httpsPort is bounds-checked above
+					//nolint:gosec // httpsPort is bound-checked above
 					httpsAdded, e = tree.addPath(ingress, rule, ruleIndex, path, pathIndex, uint16(httpsPort), albsdk.LISTENERPROTOCOL_PROTOCOL_HTTPS, websocket)
 					errors = append(errors, e...)
 				}

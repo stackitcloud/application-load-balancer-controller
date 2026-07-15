@@ -1148,6 +1148,40 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(tree.targetPools).To(BeEmpty())
 	})
 
+	It("should error if HTTPS-only ingress has no TLS secrets", func() {
+		tree, errs, err := BuildTree(
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationNetworkMode: NetworkModeNodePort,
+						AnnotationHTTPSOnly:   "true",
+					},
+				},
+			},
+			[]networkingv1.Ingress{
+				Ingress(corev1.NamespaceDefault, "ingress-1", WithRule("my-host.local",
+					WithPath("/", new(networkingv1.PathTypePrefix), "my-service", networkingv1.ServiceBackendPort{Number: 80}),
+				)),
+			},
+			nil,
+			[]corev1.Service{
+				Service(corev1.NamespaceDefault, "my-service",
+					WithServiceType(corev1.ServiceTypeNodePort), WithPort("my-port", 80, 30000, corev1.ProtocolTCP),
+				),
+			}, nil, nil,
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(errs).To(ConsistOf(
+			MatchAllFields(Fields{
+				"Ingress":     testutil.HaveName("ingress-1"),
+				"Description": Equal("ingress is HTTPS-only but has zero certificates. Skipping ingress."),
+				"FieldPath":   Equal(field.NewPath("spec", "tls")),
+			}),
+		))
+		Expect(tree.targetPools).To(BeEmpty())
+	})
+
 	DescribeTable("parsing ingress class annotation", func(key, value, expectErr string) {
 		_, _, err := BuildTree(
 			&networkingv1.IngressClass{
