@@ -313,6 +313,9 @@ func (r *IngressClassReconciler) reconcileALBResources( //nolint:gocyclo,funlen 
 	// Which certificate is a duplicate and which is "original" depends on the order in ingressClassCertificates.
 	duplicateCerts := []string{}
 	for _, cert := range ingressClassCertificates {
+		if cert.Id == nil || cert.Data == nil || cert.Data.FingerprintSha256 == nil {
+			continue
+		}
 		if _, exists := certIDMap[spec.CertificateFingerprint(*cert.Data.FingerprintSha256)]; exists {
 			duplicateCerts = append(duplicateCerts, *cert.Id)
 			continue
