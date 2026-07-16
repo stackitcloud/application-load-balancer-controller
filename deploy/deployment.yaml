@@ -17,6 +17,9 @@ spec:
       labels:
         app.kubernetes.io/name: application-load-balancer-controller
         app.kubernetes.io/part-of: stackit-alb
+        networking.gardener.cloud/to-dns: allowed
+        networking.gardener.cloud/to-apiserver: allowed
+        networking.gardener.cloud/to-public-networks: allowed
     spec:
       serviceAccountName: application-load-balancer-controller
       securityContext:
@@ -28,7 +31,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: manager
-          image: ghcr.io/stackitcloud/application-load-balancer-controller-dev:albc
+          image: ghcr.io/stackitcloud/application-load-balancer-controller:latest
           imagePullPolicy: Always
           args:
             - --cloud-config=/etc/config/cloud.yaml
