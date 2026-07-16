@@ -1,0 +1,206 @@
+# Application Load Balancer Controller User Documentation
+
+The STACKIT Application Load Balancer Controller (ALBC) exposes HTTP/HTTPS applications by provisioning and configuring managed STACKIT ALBs based on native Kubernetes Ingress resources.
+
+### Quick start
+
+To expose an application, you need to deploy three core resources: an IngressClass to provision the ALB, a Service to expose your pods, and an Ingress to define the routing.
+
+#### The ALB (IngressClass)
+
+Creating an IngressClass provisions the managed ALB instance. By default, the ALB is assigned a public ephemeral IP address, unless you configure it as an internal ALB or assign a pre-existing static IP via annotations (see [Annotations](#configuration)).
+
+If no Ingress resources are currently linked to this class, the ALB acts as an empty listener that returns an HTTP 404 Not Found.
+
+You must include the `alb.stackit.cloud/network-mode: "NodePort"` annotation on the IngressClass. This is mandatory because it tells the ALB how to reach your cluster, instructing the load balancer to route incoming traffic directly to the node ports on your cluster's worker nodes. At the moment, `NodePort` is the only supported network mode.
+
+```YAML
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: stackit-alb
+  annotations:
+    alb.stackit.cloud/network-mode: "NodePort"
+spec:
+  controller: stackit.cloud/alb-ingress
+```
+
+#### The backend (Service)
+
+Expose your application pods using a Kubernetes Service.
+
+```YAML
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-a
+  namespace: default
+  labels:
+    app: service-a
+spec:
+  type: NodePort
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: service-a
+```
+
+#### The routing (Ingress)
+
+Create the Ingress resource to route incoming traffic to your backend Service. Link it to your ALB by referencing the IngressClass name.
+
+```YAML
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: service-ingress
+  namespace: default
+spec:
+  ingressClassName: stackit-alb
+  rules:
+  - host: app.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: service-a
+            port:
+              number: 80
+```
+
+The path type `ImplementationSpecific` is currently treated as `Exact`. Regex matchers are not allowed.
+
+The annotation `kubernetes.io/ingress.class` is not supported. Use `.spec.ingressClassName` instead.
+
+### Ingress grouping & ALB lifecycle
+
+The controller automatically merges all Ingress resources that reference the same IngressClass onto a single, shared ALB instance. To provision completely isolated ALBs (for example, to separate public and internal traffic or to assign different static IPs) you must create a distinct IngressClass for each one.
+
+If you delete all Ingress resources associated with a specific class, the controller deliberately does not delete the underlying ALB infrastructure. Instead, it transitions the ALB into an empty state that returns HTTP 404s. This behavior preserves your allocated IP address and prevents unnecessary infrastructure recreation delays. To completely delete the ALB and release its associated resources, you must delete the IngressClass.
+
+### Rule precedence
+
+When multiple Ingress resources share an ALB, their routing rules are evaluated chronologically by default, meaning older Ingress resources take precedence based on their CreationTimestamp. The precedence is only important if not all rules can be admitted to the load balancer. You can override this default order by adding the `alb.stackit.cloud/priority` annotation to an Ingress. Higher integer values are evaluated first, and in the event of a tie, the controller falls back to the creation timestamp. Within an ingress, rules are evaluated top to bottom.
+
+After the admission phase, rules are ordered differently to prefer more specific matchers. Using the following criteria:
+- By path type: `Exact`, `ImplementationSpecific`, `Prefix`
+- By path length, longest first
+- By path lexicographically
+
+Note, that an ingress with a higher priority does not match first. It only means that it is preferred if not all rules can be admitted to the load balancer.
+
+### TLS and Certificate Rotation
+
+The minimal Ingress example in the Quick Start section shows an HTTP configuration. To expose your application securely via HTTPS, the ALB Ingress controller supports TLS termination using standard Kubernetes TLS Secrets.
+
+This functionality integrates seamlessly with tools like cert-manager to automate certificate provisioning and renewal. When a Secret is referenced in the Ingress `tls` block, the controller automatically handles the certificate deployment on the ALB. It continuously monitors the Secret for changes, such as during automated certificate rotation, and updates the ALB without manual intervention. Once a TLS Secret is no longer referenced by any Ingress on that ALB, it is automatically removed.
+
+By default, standard unencrypted HTTP traffic will still be possible alongside HTTPS to make automated ACME certificate challenges possible. If you want to restrict traffic so the Ingress is not reachable via standard HTTP, you can add the `alb.stackit.cloud/https-only: "true"` annotation to your Ingress or IngressClass resource.
+
+**Important:** Because the ALB selects certificates purely based on Server Name Indication (SNI), a certificate from one Ingress can impact others sharing the same ALB. To prevent unintended certificate serving, ensure your Ingress resources have no overlapping DNS names, use distinct ports, or separate them entirely using distinct IngressClasses. For TLS handshakes, the application load balancer prefers exact matches over wildcard certificates. Otherwise, if multiple certificates qualify, which one is used is unspecified.
+
+```YAML
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: secure-ingress
+  namespace: default
+spec:
+  ingressClassName: stackit-alb
+  tls:
+  - hosts:
+    - secure.example.com
+    secretName: my-tls-secret
+  rules:
+  - host: secure.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: service-a
+            port:
+              number: 80
+```
+
+The field `Ingress.spec.tls.hosts` is ignored by the controller. The ALB takes the host information directly from the certificates.
+
+### Supported Ingress Backends
+
+Currently, the STACKIT ALB Ingress controller only supports Kubernetes Service backends. Routing traffic to Resource backends (such as individual Pods or other custom resources) is not supported at this time.
+
+### Limits
+
+The following limitations are imposed by the STACKIT ALB API:
+- Maximum targets per pool: An individual target pool can contain a maximum of 250 targets.
+- Maximum target pools per ALB: A single ALB instance supports a maximum of 20 target pool.
+
+#### Target limit
+
+A target corresponds directly to a node in your Kubernetes cluster.
+Nodes that are marked for deletion are removed as targets.
+If the remaining nodes exceed 250 then the youngest 250 nodes are used as targets.
+
+#### Target pool limit
+
+Each service reference in each ingress translates to a target pool. 
+If two ingresses or paths within an ingress reference the same service and port the controller will create two target pools.
+If all ingresses of a single ingress class exceed 20 target pools then the first 20 are admitted based on their [precedence](#rule-precedence).
+
+### Configuration
+
+Configure the STACKIT Application Load Balancer using the following annotations.
+
+| Annotation | Type | Allowed On | Requirement | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `alb.stackit.cloud/network-mode` | String | IngressClass | Mandatory | Routing mode (currently only `NodePort` supported). |
+| `alb.stackit.cloud/external-address` | String | IngressClass | Optional | Uses a specific STACKIT public IP instead of an ephemeral one. After creation, can only be set to the ephemeral public it has already assigned. If the annotation is present, the public IP will not be deleted during ingress class deletion. |
+| `alb.stackit.cloud/internal` | Boolean | IngressClass | Optional | If `true`, the ALB is not exposed via a public IP. Cannot be changed after creation. |
+| `alb.stackit.cloud/plan-id` | String | IngressClass | Optional | Sets the service plan for the ALB. |
+| `alb.stackit.cloud/priority` | Integer | Ingress | Optional | Defines the evaluation priority of the Ingress. Higher number takes priority. Defaults to zero. |
+| `alb.stackit.cloud/web-application-firewall-name` | String | IngressClass | Optional | Attaches a STACKIT WAF configuration to the listeners. |
+| `alb.stackit.cloud/websocket` | Boolean | IngressClass, Ingress | Optional | If `true`, enables WebSocket support for the ALB or specific paths. |
+| `alb.stackit.cloud/http-port` | Integer | Ingress | Optional | If set, specifies a custom HTTP port (Default is 80). |
+| `alb.stackit.cloud/https-port` | Integer | Ingress | Optional | If set, specifies a custom HTTPS port (Default is 443). |
+| `alb.stackit.cloud/https-only` | Boolean | Ingress | Optional | If true, the Ingress will not be reachable via HTTP and only via HTTPS |
+| `alb.stackit.cloud/target-pool-tls-enabled` | Boolean | IngressClass, Ingress, Service | Optional | Enables TLS connections to targets. The endpoints of the referenced service must accept TLS connections. |
+| `alb.stackit.cloud/target-pool-tls-custom-ca` | String | IngressClass, Ingress, Service | Optional | A custom certificate authority for TLS connections to targets. The value must contain a PEM-encoded certificate that is a certificate authority. |
+| `alb.stackit.cloud/target-pool-tls-skip-certificate-validation`| Boolean | IngressClass, Ingress, Service | Optional | Disables certificate validation for connections to targets. |
+| `alb.stackit.cloud/allowed-source-ranges`| String | IngressClass | Accepts a comma-separated list of IP ranges. E.g. 10.0.0.0/24,1.2.3.4/32. If unset, all IPs are allowed. |
+
+### Known Limitations
+
+#### Backend Services must be of type `NodePort`
+
+The controller currently only supports routing traffic to backend Services of `type: NodePort` (or `LoadBalancer`, which also allocates a NodePort). Services of type `ClusterIP` cannot be used as backends because the ALB needs a node-reachable port to forward traffic to.
+
+#### externalTrafficPolicy=Local not supported
+
+Each service that is referenced in an ingress must use the default externalTrafficPolicy=Cluster.
+This is due to the fact that the load balancer is limited to 250 targets.
+However, a Kubernetes cluster can have more than 250 nodes.
+The application load balancer controller drops nodes beyond 250.
+With externalTrafficPolicy=Local, this could cause zero targets to be available.
+
+#### Support for `defaultBackend`
+
+The application load balancer controller currently does not support the `defaultBackend` field on Ingress resources.
+Customers should avoid relying on this feature as that field will be ignored during ALB reconciliation.
+This implies that ingresses that contain rules but no paths will also be ignored.
+
+#### Dummy listener for empty application load balancers
+
+Currently, application load balancers require at least one listener.
+If the ingress class results in zero listeners, a dummy listener on port 80 is added to be able to create the load balancer.
+This listener always returns the HTTP status code 404.
+Common scenarios where this can happen is when there are zero ingresses or an HTTPS-only load balancer does not have any certificates yet.
+
+### Troubleshooting
+
+The controller emits events on both ingresses and ingress classes.
+In case of unexpected behavior make sure to check both resources for any warning events.

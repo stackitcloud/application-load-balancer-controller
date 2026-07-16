@@ -1,0 +1,87 @@
+// revive:disable:exported // This file will be dot-imported.
+
+package ingress
+
+import (
+	networkingv1 "k8s.io/api/networking/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+)
+
+// Ingress constructs an ingress for testing purposes.
+func Ingress(namespace, name string, opts ...IngressOption) networkingv1.Ingress {
+	i := networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:   namespace,
+			Name:        name,
+			Annotations: map[string]string{},
+		},
+	}
+	for _, o := range opts {
+		o(&i)
+	}
+	return i
+}
+
+type IngressOption func(ingress *networkingv1.Ingress)
+
+func WithUID(uid string) IngressOption {
+	return func(ingress *networkingv1.Ingress) {
+		ingress.UID = types.UID(uid)
+	}
+}
+
+func WithIngressClass(ingressClass string) IngressOption {
+	return func(ingress *networkingv1.Ingress) {
+		ingress.Spec.IngressClassName = new(ingressClass)
+	}
+}
+
+func WithAnnotation(key, value string) IngressOption {
+	return func(ingress *networkingv1.Ingress) {
+		ingress.Annotations[key] = value
+	}
+}
+
+func WithTLSSecret(secretName string) IngressOption {
+	return func(ingress *networkingv1.Ingress) {
+		ingress.Spec.TLS = append(ingress.Spec.TLS, networkingv1.IngressTLS{
+			SecretName: secretName,
+		})
+	}
+}
+
+func WithRule(host string, opts ...RuleOptions) IngressOption {
+	return func(ingress *networkingv1.Ingress) {
+		rule := networkingv1.IngressRule{
+			Host: host,
+			IngressRuleValue: networkingv1.IngressRuleValue{
+				HTTP: &networkingv1.HTTPIngressRuleValue{},
+			},
+		}
+		for _, o := range opts {
+			o(&rule)
+		}
+		ingress.Spec.Rules = append(ingress.Spec.Rules, rule)
+	}
+}
+
+type RuleOptions func(rule *networkingv1.IngressRule)
+
+func WithPath(path string, pathType *networkingv1.PathType, serviceName string, serviceBackendPort networkingv1.ServiceBackendPort) RuleOptions {
+	return func(rule *networkingv1.IngressRule) {
+		if rule.HTTP.Paths == nil {
+			rule.HTTP.Paths = []networkingv1.HTTPIngressPath{}
+		}
+		rule.HTTP.Paths = append(rule.HTTP.Paths, networkingv1.HTTPIngressPath{
+			PathType: pathType,
+			Path:     path,
+			Backend: networkingv1.IngressBackend{
+				Service: &networkingv1.IngressServiceBackend{
+					Name: serviceName,
+					Port: serviceBackendPort,
+				},
+			},
+		})
+	}
+}
