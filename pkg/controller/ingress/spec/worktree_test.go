@@ -58,7 +58,7 @@ var _ = Describe("WorkTreeALB", func() {
 		}, nil, nil)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(errs).To(BeEmpty())
-		createPayload := tree.ToCreatePayload(nil, "", "")
+		createPayload := tree.ToCreatePayload(nil, "", "", nil)
 		Expect(createPayload.Listeners[0].Http.Hosts[0].Host).To(HaveValue(Equal("my-host.local")))
 		Expect(createPayload.Listeners[0].Http.Hosts[0].Rules).To(HaveLen(7))
 		Expect(createPayload.Listeners[0].Http.Hosts[0].Rules[0].Path.ExactMatch).To(HaveValue(Equal("/exact/a/a")))
@@ -108,7 +108,7 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(errs).To(BeEmpty())
 
-		createPayload := tree.ToCreatePayload(nil, "", "")
+		createPayload := tree.ToCreatePayload(nil, "", "", nil)
 
 		Expect(createPayload.Listeners[0].Http.Hosts[0].Host).To(HaveValue(Equal(host)))
 
@@ -194,7 +194,7 @@ var _ = Describe("WorkTreeALB", func() {
 				"FieldPath":   Equal(field.NewPath("spec", "tls").Index(0).Child("secretName")),
 			}),
 		))
-		create := tree.ToCreatePayload(nil, "network-id", "eu01")
+		create := tree.ToCreatePayload(nil, "network-id", "eu01", nil)
 		// HTTP rules should still work.
 		Expect(create.Listeners).To(HaveLen(1))
 		Expect(create.Listeners[0].Port).To(HaveValue(BeEquivalentTo(80)))
@@ -384,7 +384,7 @@ var _ = Describe("WorkTreeALB", func() {
 			testdata.FixtureTLS1FingerprintSHA256: "id-cert-1",
 			testdata.FixtureTLS2FingerprintSHA256: "id-cert-2",
 			testdata.FixtureTLS3FingerprintSHA256: "id-cert-3",
-		}, "my-network", "region")
+		}, "my-network", "region", nil)
 		Expect(create.Listeners).To(HaveLen(2))
 		Expect(create.Listeners[0].Port).To(HaveValue(BeEquivalentTo(443)))
 		Expect(create.Listeners[0].Https.CertificateConfig.CertificateIds).To(ConsistOf(
@@ -424,7 +424,7 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(BeEmpty())
-		create := tree.ToCreatePayload(nil, "network-id", "region")
+		create := tree.ToCreatePayload(nil, "network-id", "region", nil)
 		Expect(create.Listeners).To(HaveLen(1))
 		Expect(create.Listeners[0].Http.Hosts).To(HaveLen(1))
 		Expect(create.Listeners[0].Http.Hosts[0].Rules).To(HaveLen(2))
@@ -459,7 +459,7 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(BeEmpty())
-		create := tree.ToCreatePayload(nil, "network-id", "region")
+		create := tree.ToCreatePayload(nil, "network-id", "region", nil)
 		Expect(create.Listeners).To(HaveLen(1))
 		Expect(create.Listeners[0].Http.Hosts).To(HaveLen(1))
 		Expect(create.Listeners[0].Http.Hosts[0].Rules).To(HaveLen(2))
@@ -495,7 +495,7 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(BeEmpty())
-		create := tree.ToCreatePayload(nil, "network-id", "region")
+		create := tree.ToCreatePayload(nil, "network-id", "region", nil)
 		Expect(create.Listeners).To(HaveLen(2))
 		Expect(create.Listeners[0].WafConfigName).To(HaveValue(Equal("my-waf")))
 		Expect(create.Listeners[1].WafConfigName).To(HaveValue(Equal("my-waf")))
@@ -515,7 +515,7 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(BeEmpty())
-		create := tree.ToCreatePayload(nil, "network-id", "region")
+		create := tree.ToCreatePayload(nil, "network-id", "region", nil)
 		Expect(create.Options.AccessControl.AllowedSourceRanges).To(HaveExactElements("10.0.0.0/24", "1.2.3.4/32"))
 	})
 
@@ -533,7 +533,7 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(BeEmpty())
-		create := tree.ToCreatePayload(nil, "network-id", "region")
+		create := tree.ToCreatePayload(nil, "network-id", "region", nil)
 		Expect(create.Options.PrivateNetworkOnly).To(HaveValue(BeTrue()))
 		Expect(create.Options.EphemeralAddress).To(HaveValue(BeFalse()))
 	})
@@ -552,7 +552,7 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(BeEmpty())
-		create := tree.ToCreatePayload(nil, "network-id", "region")
+		create := tree.ToCreatePayload(nil, "network-id", "region", nil)
 		Expect(create.ExternalAddress).To(HaveValue(Equal("1.2.3.4")))
 		Expect(create.Options.EphemeralAddress).To(HaveValue(BeFalse()))
 	})
@@ -655,7 +655,7 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(BeEmpty())
-		create := tree.ToCreatePayload(nil, "network-id", "region")
+		create := tree.ToCreatePayload(nil, "network-id", "region", nil)
 		Expect(create.TargetPools).To(HaveLen(5))
 		Expect(create.TargetPools[0].TlsConfig.Enabled).To(HaveValue(BeTrue()))
 		Expect(create.TargetPools[1].TlsConfig.Enabled).To(HaveValue(BeFalse()))
@@ -686,7 +686,7 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(BeEmpty())
-		update := tree.ToUpdatePayload(nil, "network-id", "region")
+		update := tree.ToUpdatePayload(nil, "network-id", "region", nil)
 		Expect(update.Options.Observability.Logs.CredentialsRef).To(HaveValue(Equal("my-creds")))
 		Expect(update.Options.Observability.Logs.PushUrl).To(HaveValue(Equal("my-push-url")))
 	})
@@ -706,7 +706,7 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(BeEmpty())
-		update := tree.ToUpdatePayload(nil, "network-id", "region")
+		update := tree.ToUpdatePayload(nil, "network-id", "region", nil)
 		Expect(update.Version).To(HaveValue(Equal("current-version")))
 	})
 
@@ -732,7 +732,7 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(BeEmpty())
-		create := tree.ToCreatePayload(nil, "network-id", "region")
+		create := tree.ToCreatePayload(nil, "network-id", "region", nil)
 		Expect(create.Listeners[0].Http.Hosts[0].Rules[0].Path.ExactMatch).To(HaveValue(Equal("/a")))
 	})
 
@@ -880,7 +880,7 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(BeEmpty())
-		create := tree.ToCreatePayload(nil, "network-id", "region")
+		create := tree.ToCreatePayload(nil, "network-id", "region", nil)
 		Expect(create.TargetPools).To(HaveLen(1))
 		Expect(create.TargetPools[0].Targets).To(ConsistOf(
 			v2api.Target{
@@ -954,7 +954,7 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(errs).To(BeEmpty())
 
-		create := tree.ToCreatePayload(nil, "network-id", "region")
+		create := tree.ToCreatePayload(nil, "network-id", "region", nil)
 		Expect(create.TargetPools).To(HaveLen(1))
 		Expect(create.TargetPools[0].Targets).To(HaveLen(250))
 		Expect(create.TargetPools[0].Targets).To(HaveEach(MatchFields(IgnoreExtras, Fields{
@@ -1018,7 +1018,7 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(errs).To(BeEmpty())
-		create := tree.ToCreatePayload(nil, "network-id", "region")
+		create := tree.ToCreatePayload(nil, "network-id", "region", nil)
 		// Sorting of path is done in a separate test.
 		Expect(create.Listeners).To(HaveExactElements(
 			MatchFields(IgnoreExtras, Fields{
@@ -1180,6 +1180,25 @@ var _ = Describe("WorkTreeALB", func() {
 			}),
 		))
 		Expect(tree.targetPools).To(BeEmpty())
+	})
+
+	It("should contain extraLabels", func() {
+		tree, errs, err := BuildTree(
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationNetworkMode: NetworkModeNodePort,
+					},
+				},
+			}, nil, nil, nil, nil, nil,
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(errs).To(BeEmpty())
+		create := tree.ToCreatePayload(nil, "network-id", "region", map[string]string{"foo": "bar", "bar": "foo"})
+		Expect(create.Labels).To(Not(BeNil()))
+		Expect(*create.Labels).To(HaveKeyWithValue("foo", "bar"))
+		Expect(*create.Labels).To(HaveKeyWithValue("bar", "foo"))
 	})
 
 	DescribeTable("parsing ingress class annotation", func(key, value, expectErr string) {

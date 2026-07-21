@@ -673,6 +673,7 @@ func (t *WorkTreeALB) ToCreatePayload( //nolint:gocyclo,funlen // Breaking up th
 	certificateIDMap map[CertificateFingerprint]string,
 	networkID string,
 	region string,
+	extraLabels map[string]string,
 ) *albsdk.CreateLoadBalancerPayload {
 	listeners := []albsdk.Listener{}
 	for port, listener := range t.listeners {
@@ -778,13 +779,17 @@ func (t *WorkTreeALB) ToCreatePayload( //nolint:gocyclo,funlen // Breaking up th
 		ephemeralAddress = new(true)
 	}
 
+	labels := map[string]string{
+		"ingress-class-uid": string(t.ingressClass.UID),
+	}
+
+	maps.Copy(labels, extraLabels)
+
 	return &albsdk.CreateLoadBalancerPayload{
 		DisableTargetSecurityGroupAssignment: new(true), // TODO: Make this configurable via flag.
 		Name:                                 new(LoadBalancerName(t.ingressClass)),
-		Labels: &map[string]string{
-			"ingress-class-uid": string(t.ingressClass.UID),
-		},
-		Listeners: listeners,
+		Labels:                               &labels,
+		Listeners:                            listeners,
 		Networks: []albsdk.Network{
 			{
 				NetworkId: new(networkID),
@@ -813,8 +818,9 @@ func (t *WorkTreeALB) ToUpdatePayload(
 	certificateIDMap map[CertificateFingerprint]string,
 	networkID string,
 	region string,
+	extraLabels map[string]string,
 ) *albsdk.UpdateLoadBalancerPayload {
-	create := t.ToCreatePayload(certificateIDMap, networkID, region)
+	create := t.ToCreatePayload(certificateIDMap, networkID, region, extraLabels)
 	update := new(albsdk.UpdateLoadBalancerPayload{
 		DisableTargetSecurityGroupAssignment: create.DisableTargetSecurityGroupAssignment,
 		ExternalAddress:                      create.ExternalAddress,
