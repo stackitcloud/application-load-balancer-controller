@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gstruct"
@@ -17,6 +18,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
@@ -1183,14 +1185,17 @@ var _ = Describe("WorkTreeALB", func() {
 	})
 
 	It("should contain extraLabels", func() {
-		tree, errs, err := BuildTree(
-			&networkingv1.IngressClass{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{
-						AnnotationNetworkMode: NetworkModeNodePort,
-					},
+		ingressClass := &networkingv1.IngressClass{
+			ObjectMeta: metav1.ObjectMeta{
+				UID: k8stypes.UID(uuid.NewString()),
+				Annotations: map[string]string{
+					AnnotationNetworkMode: NetworkModeNodePort,
 				},
-			}, nil, nil, nil, nil, nil,
+			},
+		}
+
+		tree, errs, err := BuildTree(
+			ingressClass, nil, nil, nil, nil, nil,
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -1199,6 +1204,28 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(create.Labels).To(Not(BeNil()))
 		Expect(*create.Labels).To(HaveKeyWithValue("foo", "bar"))
 		Expect(*create.Labels).To(HaveKeyWithValue("bar", "foo"))
+		Expect(*create.Labels).To(HaveKeyWithValue(LabelIngressClassUID, string(ingressClass.UID)))
+	})
+
+	It("should not overwrite needed labels with extraLabels", func() {
+		ingressClass := &networkingv1.IngressClass{
+			ObjectMeta: metav1.ObjectMeta{
+				UID: k8stypes.UID(uuid.NewString()),
+				Annotations: map[string]string{
+					AnnotationNetworkMode: NetworkModeNodePort,
+				},
+			},
+		}
+
+		tree, errs, err := BuildTree(
+			ingressClass, nil, nil, nil, nil, nil,
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(errs).To(BeEmpty())
+		create := tree.ToCreatePayload(nil, "network-id", "region", map[string]string{LabelIngressClassUID: "foobar"})
+		Expect(create.Labels).To(Not(BeNil()))
+		Expect(*create.Labels).To(HaveKeyWithValue(LabelIngressClassUID, string(ingressClass.UID)))
 	})
 
 	DescribeTable("parsing ingress class annotation", func(key, value, expectErr string) {

@@ -779,11 +779,13 @@ func (t *WorkTreeALB) ToCreatePayload( //nolint:gocyclo,funlen // Breaking up th
 		ephemeralAddress = new(true)
 	}
 
-	labels := map[string]string{
-		"ingress-class-uid": string(t.ingressClass.UID),
+	labels := maps.Clone(extraLabels)
+	if labels == nil {
+		labels = map[string]string{}
 	}
-
-	maps.Copy(labels, extraLabels)
+	maps.Copy(labels, map[string]string{
+		LabelIngressClassUID: string(t.ingressClass.UID),
+	})
 
 	return &albsdk.CreateLoadBalancerPayload{
 		DisableTargetSecurityGroupAssignment: new(true), // TODO: Make this configurable via flag.

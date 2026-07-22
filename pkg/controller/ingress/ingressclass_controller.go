@@ -290,13 +290,13 @@ func (r *IngressClassReconciler) reconcileALBResources( //nolint:gocyclo,funlen 
 
 	missingCertificates := tree.GetMissingCertificates(ingressClassCertificates)
 	for fingerprint, c := range missingCertificates {
-		labels := map[string]string{
+		labels := maps.Clone(r.ALBConfig.ApplicationLoadBalancer.ExtraLabels)
+		if labels == nil {
+			labels = map[string]string{}
+		}
+		maps.Copy(labels, map[string]string{
 			spec.LabelIngressClassUID: string(ingressClass.UID),
-		}
-
-		if r.ALBConfig.ApplicationLoadBalancer.ExtraLabels != nil {
-			maps.Copy(labels, r.ALBConfig.ApplicationLoadBalancer.ExtraLabels)
-		}
+		})
 
 		createCertificatePayload := &certsdk.CreateCertificatePayload{
 			Name:       new("k8s-ingress-" + string(ingressClass.UID)),
