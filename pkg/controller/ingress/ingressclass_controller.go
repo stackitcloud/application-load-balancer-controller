@@ -3,7 +3,6 @@ package ingress
 import (
 	"context"
 	"fmt"
-	"maps"
 	"time"
 
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress/diff"
@@ -290,20 +289,16 @@ func (r *IngressClassReconciler) reconcileALBResources( //nolint:gocyclo,funlen 
 
 	missingCertificates := tree.GetMissingCertificates(ingressClassCertificates)
 	for fingerprint, c := range missingCertificates {
-		labels := maps.Clone(r.ALBConfig.ApplicationLoadBalancer.ExtraLabels)
-		if labels == nil {
-			labels = map[string]string{}
-		}
-		maps.Copy(labels, map[string]string{
+		labels := map[string]string{
 			spec.LabelIngressClassUID: string(ingressClass.UID),
-		})
+		}
 
 		createCertificatePayload := &certsdk.CreateCertificatePayload{
 			Name:       new("k8s-ingress-" + string(ingressClass.UID)),
 			ProjectId:  &r.ALBConfig.Global.ProjectID,
 			PrivateKey: new(c.PrivateKey),
 			PublicKey:  new(c.PublicKey),
-			Labels:     new(labels),
+			Labels:     new(spec.MergeExtraLabels(labels, r.ALBConfig.ApplicationLoadBalancer.ExtraLabels)),
 		}
 		response, err := r.CertificateClient.CreateCertificate(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region, createCertificatePayload)
 		if err != nil {
