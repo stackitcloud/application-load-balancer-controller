@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Optional cert-manager component. When included from a Kustomization via the
+# `components:` field, it contributes a self-signed cert-manager Issuer and a
+# Certificate that produces the TLS secret consumed by the webhook server.
+#
+# Requires cert-manager to be installed in the target cluster. If cert-manager
+# is not available, omit this component and provide the secret
+# `application-load-balancer-controller-webhook-cert` in the kube-system
+# namespace out-of-band, and inject the CA bundle into the
+# ValidatingWebhookConfiguration manually.
+resources:
+  - issuer.yaml

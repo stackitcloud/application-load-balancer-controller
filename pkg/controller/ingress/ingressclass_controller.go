@@ -26,8 +26,8 @@ import (
 const (
 	// finalizerName is the name of the finalizer that is added to Ingress and IngressClass
 	finalizerName = "stackit.cloud/alb-ingress"
-	// controllerName is the name of the ALB controller that the IngressClass should point to for reconciliation
-	controllerName = "stackit.cloud/alb-ingress"
+	// ControllerName is the name of the ALB controller that the IngressClass should point to for reconciliation
+	ControllerName = "stackit.cloud/alb-ingress"
 
 	// readyRequeueInterval defines how often the controller should check for the ALB to become ready.
 	readyRequeueInterval = 10 * time.Second
@@ -53,7 +53,7 @@ func (r *IngressClassReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	// Check if the IngressClass points to the ALB controller
-	if ingressClass.Spec.Controller != controllerName {
+	if ingressClass.Spec.Controller != ControllerName {
 		// If this IngressClass doesn't point to the ALB controller, ignore this IngressClass
 		return ctrl.Result{}, nil
 	}
