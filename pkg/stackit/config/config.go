@@ -24,7 +24,8 @@ type ALBConfig struct {
 	ApplicationLoadBalancer ApplicationLoadBalancerOpts `yaml:"applicationLoadBalancer"`
 }
 type ApplicationLoadBalancerOpts struct {
-	NetworkID string `yaml:"networkId"`
+	NetworkID   string            `yaml:"networkId"`
+	ExtraLabels map[string]string `yaml:"extraLabels"`
 }
 
 func readFile(path string) ([]byte, error) {

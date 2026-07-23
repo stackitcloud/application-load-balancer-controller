@@ -289,14 +289,16 @@ func (r *IngressClassReconciler) reconcileALBResources( //nolint:gocyclo,funlen 
 
 	missingCertificates := tree.GetMissingCertificates(ingressClassCertificates)
 	for fingerprint, c := range missingCertificates {
+		labels := map[string]string{
+			spec.LabelIngressClassUID: string(ingressClass.UID),
+		}
+
 		createCertificatePayload := &certsdk.CreateCertificatePayload{
 			Name:       new("k8s-ingress-" + string(ingressClass.UID)),
 			ProjectId:  &r.ALBConfig.Global.ProjectID,
 			PrivateKey: new(c.PrivateKey),
 			PublicKey:  new(c.PublicKey),
-			Labels: &map[string]string{
-				spec.LabelIngressClassUID: string(ingressClass.UID),
-			},
+			Labels:     new(spec.MergeExtraLabels(labels, r.ALBConfig.ApplicationLoadBalancer.ExtraLabels)),
 		}
 		response, err := r.CertificateClient.CreateCertificate(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region, createCertificatePayload)
 		if err != nil {
@@ -325,14 +327,24 @@ func (r *IngressClassReconciler) reconcileALBResources( //nolint:gocyclo,funlen 
 
 	alb := existingALB
 	if existingALB == nil {
-		create := tree.ToCreatePayload(certIDMap, r.ALBConfig.ApplicationLoadBalancer.NetworkID, r.ALBConfig.Global.Region)
+		create := tree.ToCreatePayload(
+			certIDMap,
+			r.ALBConfig.ApplicationLoadBalancer.NetworkID,
+			r.ALBConfig.Global.Region,
+			r.ALBConfig.ApplicationLoadBalancer.ExtraLabels,
+		)
 		alb, err = r.ALBClient.CreateLoadBalancer(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region, create)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create load balancer: %w", err)
 		}
 		ctrl.LoggerFrom(ctx).Info("Created application load balancer", "name", create.Name, "version", *alb.Version)
 	} else {
-		update := tree.ToUpdatePayload(certIDMap, r.ALBConfig.ApplicationLoadBalancer.NetworkID, r.ALBConfig.Global.Region)
+		update := tree.ToUpdatePayload(
+			certIDMap,
+			r.ALBConfig.ApplicationLoadBalancer.NetworkID,
+			r.ALBConfig.Global.Region,
+			r.ALBConfig.ApplicationLoadBalancer.ExtraLabels,
+		)
 		if diff.UpdateNeeded(existingALB, update) {
 			alb, err = r.ALBClient.UpdateLoadBalancer(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region, *update.Name, update)
 			if err != nil {
