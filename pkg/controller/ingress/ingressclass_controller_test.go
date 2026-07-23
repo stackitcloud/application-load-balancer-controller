@@ -156,7 +156,7 @@ var _ = Describe("IngressClassController", func() {
 				},
 			},
 			Spec: networkingv1.IngressClassSpec{
-				Controller: controllerName,
+				Controller: ControllerName,
 			},
 		}
 		Expect(k8sClient.Create(ctx, ingressClass)).To(Succeed())
@@ -185,7 +185,7 @@ var _ = Describe("IngressClassController", func() {
 					},
 				},
 				Spec: networkingv1.IngressClassSpec{
-					Controller: controllerName,
+					Controller: ControllerName,
 				},
 			}
 			Expect(k8sClient.Create(ctx, ingressClass)).To(Succeed())
@@ -418,7 +418,7 @@ var _ = Describe("IngressClassController", func() {
 				},
 			},
 			Spec: networkingv1.IngressClassSpec{
-				Controller: controllerName,
+				Controller: ControllerName,
 			},
 		}
 		testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, ingressClass)
@@ -468,7 +468,7 @@ var _ = Describe("IngressClassController", func() {
 				},
 			},
 			Spec: networkingv1.IngressClassSpec{
-				Controller: controllerName,
+				Controller: ControllerName,
 			},
 		}
 		testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, ignoredIngressClass)
