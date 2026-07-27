@@ -458,6 +458,25 @@ var _ = Describe("IngressClassController", func() {
 		})))
 	})
 
+	It("should log an event when alb is in error state", func(ctx context.Context) {
+		ingressClass := &networkingv1.IngressClass{
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: "ingressclass-",
+				Annotations: map[string]string{
+					spec.AnnotationNetworkMode: spec.NetworkModeNodePort,
+					spec.AnnotationExternalIP:  fake.NotExistentIP,
+				},
+			},
+			Spec: networkingv1.IngressClassSpec{
+				Controller: controllerName,
+			},
+		}
+		testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, ingressClass)
+
+		Eventually(recorder.Events).WithTimeout(5 * time.Second).Should(Receive(Equal(
+			"Warning AlbInError ALB is in error state: [TYPE_FIP_NOT_FOUND] IP address 127.0.0.1 not found")))
+	})
+
 	It("should log an event when the ingress class cannot be reconciled due to an invalid configuration", func(ctx context.Context) {
 		ignoredIngressClass := &networkingv1.IngressClass{
 			ObjectMeta: metav1.ObjectMeta{

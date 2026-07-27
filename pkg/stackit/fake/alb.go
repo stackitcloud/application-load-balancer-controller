@@ -10,6 +10,8 @@ import (
 	"k8s.io/utils/ptr"
 )
 
+const NotExistentIP = "127.0.0.1"
+
 // ALB is an in-memory implementation of stackit.ApplicationLoadBalancerClient.
 // The version of the load balancers use the following sequence: "0", "0+1", "0+1+1", "0+1+1+1", ...
 type ALB struct {
@@ -213,6 +215,15 @@ func (a *ALB) materialize(lb *albsdk.LoadBalancer) {
 	} else if lb.ExternalAddress == nil {
 		addr := a.ExternalAddress
 		lb.ExternalAddress = &addr
+	}
+	if lb.ExternalAddress != nil && *lb.ExternalAddress == NotExistentIP {
+		lb.Status = new(albsdk.LOADBALANCERSTATUS_STATUS_ERROR)
+		lb.Errors = []albsdk.LoadBalancerError{
+			{
+				Type:        new(albsdk.LOADBALANCERERRORTYPE_TYPE_FIP_NOT_FOUND),
+				Description: new(fmt.Sprintf("IP address %s not found", *lb.ExternalAddress)),
+			},
+		}
 	}
 }
 
