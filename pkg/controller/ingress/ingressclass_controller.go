@@ -89,8 +89,8 @@ func (r *IngressClassReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, nil
 	}
 
-	if requeue, err := r.checkStatus(ingressClass, alb); !requeue.IsZero() || err != nil {
-		return requeue, err
+	if requeue := r.checkStatus(ingressClass, alb); !requeue.IsZero() {
+		return requeue, nil
 	}
 
 	err = r.updateStatus(ctx, ingressClass, alb)
@@ -101,11 +101,11 @@ func (r *IngressClassReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	return ctrl.Result{}, nil
 }
 
-func (r *IngressClassReconciler) checkStatus(ingressClass *networkingv1.IngressClass, alb *albsdk.LoadBalancer) (ctrl.Result, error) {
+func (r *IngressClassReconciler) checkStatus(ingressClass *networkingv1.IngressClass, alb *albsdk.LoadBalancer) ctrl.Result {
 	albStatus := ptr.Deref(alb.Status, "unknown")
 
 	if albStatus == albsdk.LOADBALANCERSTATUS_STATUS_READY {
-		return ctrl.Result{}, nil
+		return ctrl.Result{}
 	}
 
 	if albStatus == albsdk.LOADBALANCERSTATUS_STATUS_ERROR {
@@ -116,12 +116,12 @@ func (r *IngressClassReconciler) checkStatus(ingressClass *networkingv1.IngressC
 
 		r.Recorder.Eventf(ingressClass, nil, corev1.EventTypeWarning, "AlbInError", "Reconciling", "ALB is in error state: %s", strings.Join(errMessages, "; "))
 		// return error to use backoff for retry
-		return ctrl.Result{RequeueAfter: errorRequeueInterval}, nil
+		return ctrl.Result{RequeueAfter: errorRequeueInterval}
 	}
 
 	r.Recorder.Eventf(ingressClass, nil, corev1.EventTypeNormal, "AlbNotReady", "Reconciling", "ALB is in status %q", albStatus)
 	// ALB is not yet ready, requeue
-	return ctrl.Result{RequeueAfter: readyRequeueInterval}, nil
+	return ctrl.Result{RequeueAfter: readyRequeueInterval}
 }
 
 // updateStatus updates the status of the Ingresses with the ALB IP address
