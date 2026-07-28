@@ -464,7 +464,7 @@ var _ = Describe("IngressClassController", func() {
 				GenerateName: "ingressclass-",
 				Annotations: map[string]string{
 					spec.AnnotationNetworkMode: spec.NetworkModeNodePort,
-					spec.AnnotationExternalIP:  fake.NotExistentIP,
+					spec.AnnotationExternalIP:  fake.NonExistentIP,
 				},
 			},
 			Spec: networkingv1.IngressClassSpec{

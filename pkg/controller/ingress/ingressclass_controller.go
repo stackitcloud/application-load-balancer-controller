@@ -34,6 +34,8 @@ const (
 	readyRequeueInterval = 10 * time.Second
 	// deletedRequeueInterval defines how often the controller should for the ALB to get deleted.
 	deletedRequeueInterval = 10 * time.Second
+	// errorRequeueInterval defines how often the controller should for the ALB that is in error.
+	errorRequeueInterval = 5 * time.Minute
 )
 
 // IngressClassReconciler reconciles a IngressClass object
@@ -114,7 +116,7 @@ func (r *IngressClassReconciler) checkStatus(ingressClass *networkingv1.IngressC
 
 		r.Recorder.Eventf(ingressClass, nil, corev1.EventTypeWarning, "AlbInError", "Reconciling", "ALB is in error state: %s", strings.Join(errMessages, "; "))
 		// return error to use backoff for retry
-		return ctrl.Result{}, fmt.Errorf("alb %s status is error", ptr.Deref(alb.Name, ""))
+		return ctrl.Result{RequeueAfter: errorRequeueInterval}, nil
 	}
 
 	r.Recorder.Eventf(ingressClass, nil, corev1.EventTypeNormal, "AlbNotReady", "Reconciling", "ALB is in status %q", albStatus)
