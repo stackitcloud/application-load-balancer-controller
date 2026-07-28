@@ -3,7 +3,6 @@ package ingress
 import (
 	"context"
 	"sync"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -473,7 +472,7 @@ var _ = Describe("IngressClassController", func() {
 		}
 		testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, ingressClass)
 
-		Eventually(recorder.Events).WithTimeout(5 * time.Second).Should(Receive(Equal(
+		Eventually(recorder.Events).WithContext(ctx).Should(Receive(Equal(
 			"Warning AlbInError ALB is in error state: [TYPE_FIP_NOT_FOUND] IP address 127.0.0.1 not found")))
 	})
 
@@ -492,7 +491,7 @@ var _ = Describe("IngressClassController", func() {
 		}
 		testutil.CreateKubernetesResourceAndDeferDeletion(ctx, k8sClient, ignoredIngressClass)
 
-		Eventually(recorder.Events).WithTimeout(5 * time.Second).Should(Receive(Equal(
+		Eventually(recorder.Events).WithContext(ctx).Should(Receive(Equal(
 			`Warning InvalidIngressClass The ingress class cannot be reconciled because it has an invalid configuration: ` +
 				`failed to parse external IP annotation: ParseAddr("not-valid"): unable to parse IP`)))
 	})
