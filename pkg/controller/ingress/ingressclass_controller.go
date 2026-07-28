@@ -115,7 +115,6 @@ func (r *IngressClassReconciler) checkStatus(ingressClass *networkingv1.IngressC
 		}
 
 		r.Recorder.Eventf(ingressClass, nil, corev1.EventTypeWarning, "AlbInError", "Reconciling", "ALB is in error state: %s", strings.Join(errMessages, "; "))
-		// return error to use backoff for retry
 		return ctrl.Result{RequeueAfter: errorRequeueInterval}
 	}
 
