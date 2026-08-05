@@ -10,10 +10,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
-	"net"
-	"net/netip"
 	"slices"
-	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -127,7 +124,7 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 
 	targets := getTargetsOfNodes(nodes)
 
-	if err := parseNetworkMode(ingressClass); err != nil {
+	if err := ValidateNetworkMode(ingressClass); err != nil {
 		return nil, nil, err
 	}
 
@@ -323,59 +320,32 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 	return tree, errors, nil
 }
 
-func parseNetworkMode(ingressClass *networkingv1.IngressClass) error {
-	networkMode := ingressClass.Annotations[AnnotationNetworkMode]
-	if networkMode != NetworkModeNodePort {
-		return fmt.Errorf("annotation %s must be set to %s", AnnotationNetworkMode, NetworkModeNodePort)
-	}
-	return nil
-}
-
 func parseExternalIP(ingressClass *networkingv1.IngressClass) (string, error) {
 	externalIP := ingressClass.Annotations[AnnotationExternalIP]
-	if externalIP != "" {
-		addr, err := netip.ParseAddr(externalIP)
-		if err != nil {
-			return "", fmt.Errorf("failed to parse external IP annotation: %w", err)
-		}
-		if !addr.Is4() {
-			return "", fmt.Errorf("external IP annotation is not an IPv4 address")
-		}
+	if err := ValidateExternalIP(externalIP); err != nil {
+		return "", err
 	}
 	return externalIP, nil
 }
 
-var servicePlans = []string{
-	"p10",
-}
-
-const defaultServicePlan = "p10"
-
 func parsePlanID(ingressClass *networkingv1.IngressClass) (string, error) {
 	planID := ingressClass.Annotations[AnnotationPlanID]
 	if planID == "" {
-		planID = defaultServicePlan
+		return DefaultServicePlan, nil
 	}
-	if !slices.Contains(servicePlans, planID) {
-		return "", fmt.Errorf("invalid plan id %q", planID)
+	if err := ValidatePlanID(planID); err != nil {
+		return "", err
 	}
 	return planID, nil
 }
 
 func addAccessControlToTree(tree *WorkTreeALB, ingressClass *networkingv1.IngressClass) error {
-	annotation := ingressClass.Annotations[AnnotationAllowedSourceRanges]
-	if annotation == "" {
-		return nil
+	ranges, err := ValidateAllowedSourceRanges(ingressClass.Annotations[AnnotationAllowedSourceRanges])
+	if err != nil {
+		return err
 	}
-	ranges := strings.Split(annotation, ",")
-	for i, r := range ranges {
-		if k := slices.Index(ranges, r); k < i {
-			return fmt.Errorf("duplicate range in annotation %s", AnnotationAllowedSourceRanges)
-		}
-		_, _, err := net.ParseCIDR(r)
-		if err != nil {
-			return fmt.Errorf("IP range %d is invalid: %w", i, err)
-		}
+	if ranges == nil {
+		return nil
 	}
 	tree.accessControl = &albsdk.LoadbalancerOptionAccessControl{
 		AllowedSourceRanges: ranges,

@@ -1,0 +1,47 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: application-load-balancer-controller
+  labels:
+    app.kubernetes.io/name: application-load-balancer-controller
+    app.kubernetes.io/part-of: stackit-alb
+  annotations:
+    # cert-manager injects the CA bundle from the certificate referenced below.
+    # When applied without the cert-manager overlay, operators must set
+    # webhooks[*].clientConfig.caBundle out-of-band.
+    cert-manager.io/inject-ca-from: kube-system/application-load-balancer-controller-webhook-cert
+webhooks:
+  - name: validate-ingress.alb.stackit.cloud
+    rules:
+      - apiGroups: ["networking.k8s.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["ingresses"]
+        scope: "Namespaced"
+    clientConfig:
+      service:
+        namespace: kube-system
+        name: application-load-balancer-controller
+        path: /validate-ingress
+        port: 443
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    timeoutSeconds: 5
+    failurePolicy: Fail
+  - name: validate-ingressclass.alb.stackit.cloud
+    rules:
+      - apiGroups: ["networking.k8s.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["ingressclasses"]
+        scope: "Cluster"
+    clientConfig:
+      service:
+        namespace: kube-system
+        name: application-load-balancer-controller
+        path: /validate-ingressclass
+        port: 443
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    timeoutSeconds: 5
+    failurePolicy: Fail

@@ -47,6 +47,9 @@ spec:
             - name: probes
               containerPort: 8081
               protocol: TCP
+            - name: webhook
+              containerPort: 9443
+              protocol: TCP
           livenessProbe:
             httpGet:
               path: /healthz
@@ -77,6 +80,9 @@ spec:
             name: cloud-config
           - mountPath: /etc/serviceaccount
             name: cloud-secret
+          - mountPath: /tmp/k8s-webhook-server/serving-certs
+            name: webhook-cert
+            readOnly: true
       volumes:
       - name: cloud-config
         configMap:
@@ -84,4 +90,9 @@ spec:
       - name: cloud-secret
         secret:
           secretName: stackit-cloud-secret
+      - name: webhook-cert
+        secret:
+          # The secret is created by the cert-manager overlay (deploy/cert-manager)
+          # or must be provided out-of-band by the cluster operator.
+          secretName: application-load-balancer-controller-webhook-cert
       terminationGracePeriodSeconds: 30

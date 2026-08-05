@@ -200,6 +200,22 @@ If the ingress class results in zero listeners, a dummy listener on port 80 is a
 This listener always returns the HTTP status code 404.
 Common scenarios where this can happen is when there are zero ingresses or an HTTPS-only load balancer does not have any certificates yet.
 
+### Validating Admission Webhook
+
+The controller ships two Kubernetes validating admission webhooks that reject
+Ingress and IngressClass objects with invalid annotations at admission time.
+This lets you catch mistakes (invalid IP addresses, unsupported plan IDs,
+missing mandatory annotations, immutable field changes, etc.) before they are
+persisted, instead of only observing them via reconciliation events later.
+
+The webhooks only validate resources managed by the STACKIT ALB controller:
+
+- For an `Ingress`, validation is skipped when `spec.ingressClassName` is unset
+  or references an `IngressClass` whose `spec.controller` is not
+  `stackit.cloud/alb-ingress`.
+- For an `IngressClass`, validation is skipped when `spec.controller` is not
+  `stackit.cloud/alb-ingress`.
+
 ### Troubleshooting
 
 The controller emits events on both ingresses and ingress classes.

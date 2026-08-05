@@ -135,7 +135,7 @@ func ingressClassRequestsForReferencingIngresses(ctx context.Context, c client.C
 		if err := c.Get(ctx, types.NamespacedName{Name: className}, class); err != nil {
 			continue
 		}
-		if class.Spec.Controller == controllerName {
+		if class.Spec.Controller == ControllerName {
 			reqs = append(reqs, reconcile.Request{NamespacedName: types.NamespacedName{Name: className}})
 		}
 	}
@@ -151,7 +151,7 @@ func nodeEventHandler(c client.Client) handler.EventHandler {
 		}
 		requestList := []ctrl.Request{}
 		for i := range ingressClassList.Items {
-			if ingressClassList.Items[i].Spec.Controller != controllerName {
+			if ingressClassList.Items[i].Spec.Controller != ControllerName {
 				continue
 			}
 			requestList = append(requestList, ctrl.Request{
@@ -175,7 +175,7 @@ func ingressEventHandler(c client.Client) handler.EventHandler {
 			return nil
 		}
 
-		if ingressClass.Spec.Controller != controllerName {
+		if ingressClass.Spec.Controller != ControllerName {
 			return nil
 		}
 
@@ -221,6 +221,6 @@ func ingressClassPredicate() predicate.Predicate {
 		if !ok {
 			return false
 		}
-		return ingressClass.Spec.Controller == controllerName
+		return ingressClass.Spec.Controller == ControllerName
 	})
 }
