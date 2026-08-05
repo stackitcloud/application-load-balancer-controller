@@ -3,6 +3,7 @@ package ingress
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress/diff"
@@ -33,6 +34,8 @@ const (
 	readyRequeueInterval = 10 * time.Second
 	// deletedRequeueInterval defines how often the controller should for the ALB to get deleted.
 	deletedRequeueInterval = 10 * time.Second
+	// errorRequeueInterval defines how often the controller should for the ALB that is in error.
+	errorRequeueInterval = 5 * time.Minute
 )
 
 // IngressClassReconciler reconciles a IngressClass object
@@ -86,23 +89,43 @@ func (r *IngressClassReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, nil
 	}
 
-	requeue, err := r.updateStatus(ctx, ingressClass, alb)
+	if requeue := r.checkStatus(ingressClass, alb); !requeue.IsZero() {
+		return requeue, nil
+	}
+
+	err = r.updateStatus(ctx, ingressClass, alb)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update ingress status: %w", err)
 	}
 
-	return requeue, nil
+	return ctrl.Result{}, nil
+}
+
+func (r *IngressClassReconciler) checkStatus(ingressClass *networkingv1.IngressClass, alb *albsdk.LoadBalancer) ctrl.Result {
+	albStatus := ptr.Deref(alb.Status, "unknown")
+
+	if albStatus == albsdk.LOADBALANCERSTATUS_STATUS_READY {
+		return ctrl.Result{}
+	}
+
+	if albStatus == albsdk.LOADBALANCERSTATUS_STATUS_ERROR {
+		var errMessages []string
+		for _, lbErr := range alb.GetErrors() {
+			errMessages = append(errMessages, fmt.Sprintf("[%s] %s", lbErr.GetType(), lbErr.GetDescription()))
+		}
+
+		r.Recorder.Eventf(ingressClass, nil, corev1.EventTypeWarning, "AlbInError", "Reconciling", "ALB is in error state: %s", strings.Join(errMessages, "; "))
+		return ctrl.Result{RequeueAfter: errorRequeueInterval}
+	}
+
+	r.Recorder.Eventf(ingressClass, nil, corev1.EventTypeNormal, "AlbNotReady", "Reconciling", "ALB is in status %q", albStatus)
+	// ALB is not yet ready, requeue
+	return ctrl.Result{RequeueAfter: readyRequeueInterval}
 }
 
 // updateStatus updates the status of the Ingresses with the ALB IP address
 func (r *IngressClassReconciler) updateStatus(
-	ctx context.Context, ingressClass *networkingv1.IngressClass, alb *albsdk.LoadBalancer) (ctrl.Result, error) {
-	if alb.Status == nil || *alb.Status != albsdk.LOADBALANCERSTATUS_STATUS_READY {
-		r.Recorder.Eventf(ingressClass, nil, corev1.EventTypeNormal, "AlbNotReady", "Reconciling", "ALB is in status %q", ptr.Deref(alb.Status, "unknown"))
-		// ALB is not yet ready, requeue
-		return ctrl.Result{RequeueAfter: readyRequeueInterval}, nil
-	}
-
+	ctx context.Context, ingressClass *networkingv1.IngressClass, alb *albsdk.LoadBalancer) error {
 	var albIP string
 	if alb.ExternalAddress != nil && *alb.ExternalAddress != "" {
 		albIP = *alb.ExternalAddress
@@ -112,12 +135,12 @@ func (r *IngressClassReconciler) updateStatus(
 	}
 
 	if albIP == "" {
-		return ctrl.Result{}, fmt.Errorf("alb %s is ready but has no IPs", ptr.Deref(alb.Name, ""))
+		return fmt.Errorf("alb %s is ready but has no IPs", ptr.Deref(alb.Name, ""))
 	}
 
 	ingresses, err := r.getIngressesForIngressClass(ctx, ingressClass)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to get ingresses: %w", err)
+		return fmt.Errorf("failed to get ingresses: %w", err)
 	}
 
 	for i := range ingresses {
@@ -135,11 +158,11 @@ func (r *IngressClassReconciler) updateStatus(
 		}
 		patch := client.MergeFrom(before)
 		if err := r.Client.Status().Patch(ctx, ingress, patch); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to patch ingress status object: %w", err)
+			return fmt.Errorf("failed to patch ingress status object: %w", err)
 		}
 	}
 
-	return ctrl.Result{}, nil
+	return nil
 }
 
 func (r *IngressClassReconciler) getIngressesForIngressClass(ctx context.Context, ingressClass *networkingv1.IngressClass) ([]networkingv1.Ingress, error) {
