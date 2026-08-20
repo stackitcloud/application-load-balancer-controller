@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress"
+	ingresswebhook "github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress/webhook"
 	albclient "github.com/stackitcloud/application-load-balancer-controller/pkg/stackit"
 	stackitconfig "github.com/stackitcloud/application-load-balancer-controller/pkg/stackit/config"
 	sdkconfig "github.com/stackitcloud/stackit-sdk-go/core/config"
@@ -16,6 +17,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 var (
@@ -123,6 +126,22 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "IngressClass")
 		os.Exit(1)
 	}
+
+	// The API reader is used instead of the cached client so that the IngressClass
+	// lookups always reflect the current API server state.
+	decoder := admission.NewDecoder(mgr.GetScheme())
+	mgr.GetWebhookServer().Register("/validate-ingress", &webhook.Admission{
+		Handler: &ingresswebhook.IngressValidator{
+			Client:  mgr.GetAPIReader(),
+			Decoder: decoder,
+		},
+	})
+	mgr.GetWebhookServer().Register("/validate-ingressclass", &webhook.Admission{
+		Handler: &ingresswebhook.IngressClassValidator{
+			Client:  mgr.GetAPIReader(),
+			Decoder: decoder,
+		},
+	})
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")
