@@ -5,11 +5,13 @@ import (
 	"os"
 
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress"
+	"github.com/stackitcloud/application-load-balancer-controller/pkg/metrics"
 	albclient "github.com/stackitcloud/application-load-balancer-controller/pkg/stackit"
 	stackitconfig "github.com/stackitcloud/application-load-balancer-controller/pkg/stackit/config"
 	sdkconfig "github.com/stackitcloud/stackit-sdk-go/core/config"
 	albsdk "github.com/stackitcloud/stackit-sdk-go/services/alb/v2api"
 	certsdk "github.com/stackitcloud/stackit-sdk-go/services/certificates/v2api"
+	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -30,6 +32,10 @@ type options struct {
 	leaderElectionID        string
 	probeAddr               string
 	cloudConfig             string
+}
+
+func init() {
+	ctrlmetrics.Registry.MustRegister(metrics.NewExporter())
 }
 
 // nolint:funlen // This function isn't awfully complex.
@@ -75,6 +81,7 @@ func main() {
 	}
 	albOpts := []sdkconfig.ConfigurationOption{
 		sdkconfig.WithUserAgent("application-load-balancer-controller"),
+		sdkconfig.WithHTTPClient(metrics.NewHTTPClient("application-load-balancer-controller")),
 	}
 	if config.Global.APIEndpoints.ApplicationLoadBalancerAPI != "" {
 		albOpts = append(albOpts, sdkconfig.WithEndpoint(config.Global.APIEndpoints.ApplicationLoadBalancerAPI))
@@ -82,6 +89,7 @@ func main() {
 
 	certOpts := []sdkconfig.ConfigurationOption{
 		sdkconfig.WithUserAgent("application-load-balancer-controller"),
+		sdkconfig.WithHTTPClient(metrics.NewHTTPClient("application-load-balancer-controller")),
 	}
 	if config.Global.APIEndpoints.ApplicationLoadBalancerCertificateAPI != "" {
 		certOpts = append(certOpts, sdkconfig.WithEndpoint(config.Global.APIEndpoints.ApplicationLoadBalancerCertificateAPI))
