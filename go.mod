@@ -12,9 +12,9 @@ require (
 	github.com/stackitcloud/stackit-sdk-go/services/alb v0.17.1
 	github.com/stackitcloud/stackit-sdk-go/services/certificates v1.9.1
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.36.3
-	k8s.io/apimachinery v0.36.3
-	k8s.io/client-go v0.36.3
+	k8s.io/api v0.36.4
+	k8s.io/apimachinery v0.36.4
+	k8s.io/client-go v0.36.4
 	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3
 	sigs.k8s.io/controller-runtime v0.24.1
 )
