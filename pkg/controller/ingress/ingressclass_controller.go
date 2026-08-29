@@ -8,6 +8,7 @@ import (
 
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress/diff"
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress/spec"
+	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress/targets"
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/stackit"
 	stackitconfig "github.com/stackitcloud/application-load-balancer-controller/pkg/stackit/config"
 	albsdk "github.com/stackitcloud/stackit-sdk-go/services/alb/v2api"
@@ -27,8 +28,8 @@ import (
 const (
 	// finalizerName is the name of the finalizer that is added to Ingress and IngressClass
 	finalizerName = "stackit.cloud/alb-ingress"
-	// controllerName is the name of the ALB controller that the IngressClass should point to for reconciliation
-	controllerName = "stackit.cloud/alb-ingress"
+	// ControllerName is the name of the ALB controller that the IngressClass should point to for reconciliation
+	ControllerName = "stackit.cloud/alb-ingress"
 
 	// readyRequeueInterval defines how often the controller should check for the ALB to become ready.
 	readyRequeueInterval = 10 * time.Second
@@ -45,6 +46,7 @@ type IngressClassReconciler struct { //nolint:revive // Naming this ClassReconci
 	ALBClient         stackit.ApplicationLoadBalancerClient
 	CertificateClient stackit.CertificatesClient
 	ALBConfig         stackitconfig.ALBConfig
+	TargetRetrievers  map[string]targets.Retriever
 }
 
 func (r *IngressClassReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -56,7 +58,7 @@ func (r *IngressClassReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	// Check if the IngressClass points to the ALB controller
-	if ingressClass.Spec.Controller != controllerName {
+	if ingressClass.Spec.Controller != ControllerName {
 		// If this IngressClass doesn't point to the ALB controller, ignore this IngressClass
 		return ctrl.Result{}, nil
 	}
@@ -272,11 +274,6 @@ func (r *IngressClassReconciler) reconcileALBResources( //nolint:gocyclo,funlen 
 		return nil, fmt.Errorf("failed to get services for ingresses: %w", err)
 	}
 
-	nodes := corev1.NodeList{}
-	if err := r.Client.List(ctx, &nodes); err != nil {
-		return nil, fmt.Errorf("failed to get nodes: %w", err)
-	}
-
 	existingALB, err := r.ALBClient.GetLoadBalancer(ctx, r.ALBConfig.Global.ProjectID, r.ALBConfig.Global.Region, spec.LoadBalancerName(ingressClass))
 	if err != nil && !stackit.IsNotFound(err) {
 		return nil, fmt.Errorf("failed to get load balancer: %w", err)
@@ -286,12 +283,14 @@ func (r *IngressClassReconciler) reconcileALBResources( //nolint:gocyclo,funlen 
 	}
 
 	tree, errs, err := spec.BuildTree(
+		ctx,
 		ingressClass,
 		ingresses,
 		secrets,
 		services,
-		nodes.Items,
 		existingALB,
+		r.TargetRetrievers,
+		r.ALBConfig.ApplicationLoadBalancer.DefaultNetworkMode,
 	)
 	if err != nil {
 		r.Recorder.Eventf(ingressClass, nil, corev1.EventTypeWarning, "InvalidIngressClass", "Reconciling",

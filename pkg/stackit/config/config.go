@@ -25,8 +25,9 @@ type ALBConfig struct {
 	ApplicationLoadBalancer ApplicationLoadBalancerOpts `yaml:"applicationLoadBalancer"`
 }
 type ApplicationLoadBalancerOpts struct {
-	NetworkID   string            `yaml:"networkId"`
-	ExtraLabels map[string]string `yaml:"extraLabels"`
+	NetworkID          string            `yaml:"networkId"`
+	DefaultNetworkMode string            `yaml:"defaultNetworkMode`
+	ExtraLabels        map[string]string `yaml:"extraLabels"`
 }
 
 var (

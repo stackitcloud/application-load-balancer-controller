@@ -5,6 +5,8 @@ import (
 	"os"
 
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress"
+	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress/spec"
+	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress/targets"
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/metrics"
 	albclient "github.com/stackitcloud/application-load-balancer-controller/pkg/stackit"
 	stackitconfig "github.com/stackitcloud/application-load-balancer-controller/pkg/stackit/config"
@@ -121,12 +123,21 @@ func main() {
 
 	ctx := ctrl.SetupSignalHandler()
 
+	nodeRetriever := &targets.NodeRetriever{
+		Client:             mgr.GetClient(),
+		TargetPerPoolLimit: spec.LimitTargetsPerPool,
+		ControllerName:     ingress.ControllerName,
+	}
+
 	if err = (&ingress.IngressClassReconciler{
 		Client:            mgr.GetClient(),
 		Recorder:          mgr.GetEventRecorder("ingressclass-controller"),
 		ALBClient:         albClient,
 		CertificateClient: certificateClient,
 		ALBConfig:         config,
+		TargetRetrievers: map[string]targets.Retriever{
+			spec.NetworkModeNodePort: nodeRetriever,
+		},
 	}).SetupWithManager(ctx, mgr, ""); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "IngressClass")
 		os.Exit(1)

@@ -2,6 +2,7 @@ package spec
 
 import (
 	"cmp"
+	"context"
 	"crypto/sha256"
 	cryptotls "crypto/tls"
 	"crypto/x509"
@@ -22,7 +23,7 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/stackitcloud/application-load-balancer-controller/pkg/kubeutil"
+	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress/targets"
 	albsdk "github.com/stackitcloud/stackit-sdk-go/services/alb/v2api"
 	certsdk "github.com/stackitcloud/stackit-sdk-go/services/certificates/v2api"
 )
@@ -36,12 +37,14 @@ type CertificateFingerprint string
 //
 // Look at the methods how a work tree can be used.
 type WorkTreeALB struct {
-	ingressClass  *networkingv1.IngressClass
-	planID        string
-	waf           string
-	accessControl *albsdk.LoadbalancerOptionAccessControl
-	internalLB    bool
-	externalIP    string
+	targetRetriever    map[string]targets.Retriever
+	defaultNetworkMode string
+	ingressClass       *networkingv1.IngressClass
+	planID             string
+	waf                string
+	accessControl      *albsdk.LoadbalancerOptionAccessControl
+	internalLB         bool
+	externalIP         string
 
 	listeners map[uint16]*workTreeListener
 	// We can already create the real type because there is nothing to merge or track.
@@ -49,6 +52,15 @@ type WorkTreeALB struct {
 	certificates map[CertificateFingerprint]WorkTreeCertificate
 
 	existingALB *albsdk.LoadBalancer
+}
+
+func (t *WorkTreeALB) targetRetrieverForIngress(ingClass *networkingv1.IngressClass, ing *networkingv1.Ingress) (targets.Retriever, error) {
+	networkMode := parseNetworkMode(ingClass, ing, t.defaultNetworkMode)
+	retriever, ok := t.targetRetriever[networkMode]
+	if !ok {
+		return nil, fmt.Errorf("unknown network mode %s", networkMode)
+	}
+	return retriever, nil
 }
 
 type workTreeListener struct {
@@ -107,12 +119,14 @@ type WorkTreeCertificate struct {
 //
 // This function either return a tree and some error events or a nil tree and an error indicating that the entire ALB is invalid.
 func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make it much simpler.
+	ctx context.Context,
 	ingressClass *networkingv1.IngressClass,
 	ingresses []networkingv1.Ingress,
 	secrets []corev1.Secret,
 	services []corev1.Service,
-	nodes []corev1.Node,
 	existingALB *albsdk.LoadBalancer,
+	targetsRetrievers map[string]targets.Retriever,
+	defaultNetworkMode string,
 ) (*WorkTreeALB, []ErrorEvent, error) {
 	errors := []ErrorEvent{}
 
@@ -123,12 +137,6 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 	secretsMap := map[types.NamespacedName]corev1.Secret{}
 	for i := range secrets {
 		secretsMap[client.ObjectKeyFromObject(&secrets[i])] = secrets[i]
-	}
-
-	targets := getTargetsOfNodes(nodes)
-
-	if err := parseNetworkMode(ingressClass); err != nil {
-		return nil, nil, err
 	}
 
 	externalIP, err := parseExternalIP(ingressClass)
@@ -153,10 +161,12 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 		internalLB:   internalLB,
 		externalIP:   externalIP,
 
-		listeners:    map[uint16]*workTreeListener{},
-		targetPools:  map[ingressPathReference]*albsdk.TargetPool{},
-		existingALB:  existingALB,
-		certificates: map[CertificateFingerprint]WorkTreeCertificate{},
+		listeners:          map[uint16]*workTreeListener{},
+		targetPools:        map[ingressPathReference]*albsdk.TargetPool{},
+		existingALB:        existingALB,
+		certificates:       map[CertificateFingerprint]WorkTreeCertificate{},
+		targetRetriever:    targetsRetrievers,
+		defaultNetworkMode: defaultNetworkMode,
 	}
 
 	if err := addAccessControlToTree(tree, ingressClass); err != nil {
@@ -294,7 +304,15 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 					ruleIndex: ruleIndex, pathIndex: pathIndex,
 				}
 
-				targetPool, e := buildTargetPool(tree, ingressClass, targets, ingress, ruleIndex, path, pathIndex, servicesMap)
+				tr, err := tree.targetRetrieverForIngress(ingressClass, ingress)
+				if err != nil {
+					errors = append(errors, ErrorEvent{
+						Ingress:     ingress,
+						Description: err.Error(),
+					})
+					continue
+				}
+				targetPool, e := buildTargetPool(ctx, tree, ingressClass, tr, ingress, ruleIndex, path, pathIndex, servicesMap)
 				errors = append(errors, e...)
 				if targetPool == nil {
 					continue // If the target pool is invalid we do not add any rules.
@@ -323,12 +341,16 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 	return tree, errors, nil
 }
 
-func parseNetworkMode(ingressClass *networkingv1.IngressClass) error {
-	networkMode := ingressClass.Annotations[AnnotationNetworkMode]
-	if networkMode != NetworkModeNodePort {
-		return fmt.Errorf("annotation %s must be set to %s", AnnotationNetworkMode, NetworkModeNodePort)
+func parseNetworkMode(ingressClass *networkingv1.IngressClass, ingress *networkingv1.Ingress, defaultMode string) string {
+	networkMode, ok := ingressClass.Annotations[AnnotationNetworkMode]
+	if !ok {
+		networkMode, ok = ingress.Annotations[AnnotationNetworkMode]
+		if !ok {
+			return defaultMode
+		}
 	}
-	return nil
+
+	return networkMode
 }
 
 func parseExternalIP(ingressClass *networkingv1.IngressClass) (string, error) {
@@ -447,11 +469,10 @@ func (t *WorkTreeALB) addPath(
 // This function doesn't mutate tree or any other arguments.
 // If the target pool is not valid nil is returned together with a list of errors.
 func buildTargetPool( //nolint:gocyclo,funlen // TODO: Make function easier?!
-	tree *WorkTreeALB, ingressClass *networkingv1.IngressClass, targets []albsdk.Target, ingress *networkingv1.Ingress,
+	ctx context.Context, tree *WorkTreeALB, ingressClass *networkingv1.IngressClass, targetsRetriever targets.Retriever, ingress *networkingv1.Ingress,
 	ruleIndex int, path networkingv1.HTTPIngressPath, pathIndex int, servicesMap map[types.NamespacedName]corev1.Service,
 ) (*albsdk.TargetPool, []ErrorEvent) {
 	errors := []ErrorEvent{}
-
 	ingressPathRef := ingressPathReference{namespace: ingress.Namespace, name: ingress.Name, uid: string(ingress.UID), ruleIndex: ruleIndex, pathIndex: pathIndex}
 
 	_, exists := tree.targetPools[ingressPathRef]
@@ -482,42 +503,28 @@ func buildTargetPool( //nolint:gocyclo,funlen // TODO: Make function easier?!
 		})
 		return nil, errors
 	}
-	if service.Spec.Type != corev1.ServiceTypeNodePort && service.Spec.Type != corev1.ServiceTypeLoadBalancer {
+
+	targets, err := targetsRetriever.Targets(ctx, ingressClass, ingress)
+	if err != nil {
 		errors = append(errors, ErrorEvent{
 			Ingress:     ingress,
-			FieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("paths").Index(pathIndex).Child("backend", "service", "name"),
-			Description: "Service is not of type NodePort or LoadBalancer",
-		})
-		return nil, errors
-	}
-	nodePort := int32(0)
-	for _, port := range service.Spec.Ports {
-		// We must not match an empty port name against an empty port name.
-		if port.Port == path.Backend.Service.Port.Number ||
-			(port.Name != "" && port.Name == path.Backend.Service.Port.Name) {
-			if port.NodePort == 0 {
-				errors = append(errors, ErrorEvent{
-					Ingress:     ingress,
-					FieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("paths").Index(pathIndex).Child("backend", "service"),
-					Description: "Service port doesn't have a node port",
-				})
-				continue
-			}
-			nodePort = port.NodePort
-		}
-	}
-	if nodePort == 0 {
-		errors = append(errors, ErrorEvent{
-			Ingress:     ingress,
-			FieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("paths").Index(pathIndex).Child("backend", "service"),
-			Description: "Port not found in service.",
+			Description: fmt.Sprintf("failed to retrieve targets: %s", err.Error()),
 		})
 		return nil, errors
 	}
 
+	port, err := targetsRetriever.Port(&service, path.Backend.Service)
+	if err != nil {
+		errors = append(errors, ErrorEvent{
+			Ingress:     ingress,
+			FieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("paths").Index(pathIndex).Child("backend", "service"),
+			Description: err.Error(),
+		})
+	}
+
 	targetPool := &albsdk.TargetPool{
 		Name:       new(ingressPathRef.toTargetPoolName()),
-		TargetPort: new(nodePort),
+		TargetPort: new(port),
 		Targets:    targets,
 	}
 
@@ -595,40 +602,6 @@ func ValidateTLSCertAndFingerprint(publicKey, privateKey []byte) (string, error)
 	}
 	sha256Hash := sha256.Sum256(cert.Leaf.Raw)
 	return hex.EncodeToString(sha256Hash[:]), nil
-}
-
-// getTargetsOfNodes returns all targets that should be used for the application load balancer.
-// It filters out nodes that don't qualify as targets.
-// The returned slice is sorted.
-func getTargetsOfNodes(nodes []corev1.Node) []albsdk.Target {
-	slices.SortFunc(nodes, func(a, b corev1.Node) int {
-		return b.CreationTimestamp.Compare(a.CreationTimestamp.Time)
-	})
-
-	targets := []albsdk.Target{}
-	for i := range nodes {
-		node := &nodes[i]
-		if isNodeTerminating(node) {
-			continue
-		}
-		for j := range node.Status.Addresses {
-			address := node.Status.Addresses[j]
-			if address.Type == corev1.NodeInternalIP {
-				targets = append(targets, albsdk.Target{
-					DisplayName: &node.Name, // TODO: Sanitize node name (see CCM)
-					Ip:          &address.Address,
-				})
-				break
-			}
-		}
-		if len(targets) >= LimitTargetsPerPool {
-			break
-		}
-	}
-	slices.SortFunc(targets, func(a, b albsdk.Target) int {
-		return cmp.Compare(*a.Ip, *b.Ip)
-	})
-	return targets
 }
 
 // GetMissingCertificates returns all certificates that are required by t except those that it finds in existingCert.
@@ -838,23 +811,6 @@ func (t *WorkTreeALB) ToUpdatePayload(
 	}
 	update.Version = t.existingALB.Version
 	return update
-}
-
-const (
-	// From https://github.com/kubernetes/cloud-provider/blob/81e4f58b4d1badd71d633d356faaaf69d971d874/controllers/service/controller.go#L64C2-L64C53
-	TaintToBeDeleted = "ToBeDeletedByClusterAutoscaler"
-	// From https://github.com/gardener/machine-controller-manager/blob/fc341881a5e71d7c5f240ca73415f967084aa85b/pkg/util/provider/machineutils/utils.go#L61
-	ConditionNodeTermination corev1.NodeConditionType = "Terminating"
-)
-
-func isNodeTerminating(node *corev1.Node) bool {
-	if kubeutil.GetTaint(node, TaintToBeDeleted) != nil {
-		return true
-	}
-	if cond := kubeutil.GetNodeCondition(node, ConditionNodeTermination); cond != nil && cond.Status == corev1.ConditionTrue {
-		return true
-	}
-	return false
 }
 
 // pathTypeRank ranks the path types in the order in which the should appear in the ALB, lowest number first.

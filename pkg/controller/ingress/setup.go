@@ -3,17 +3,13 @@ package ingress
 import (
 	"context"
 	"fmt"
-	"reflect"
 
-	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress/spec"
-	"github.com/stackitcloud/application-load-balancer-controller/pkg/kubeutil"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -79,14 +75,18 @@ func (r *IngressClassReconciler) SetupWithManager(ctx context.Context, mgr ctrl.
 		ctrlName = "ingressclass"
 	}
 
-	return ctrl.NewControllerManagedBy(mgr).
+	b := ctrl.NewControllerManagedBy(mgr).
 		For(&networkingv1.IngressClass{}, builder.WithPredicates(ingressClassPredicate())).
-		Watches(&corev1.Node{}, nodeEventHandler(r.Client), builder.WithPredicates(nodePredicate())).
 		Watches(&networkingv1.Ingress{}, ingressEventHandler(r.Client)).
 		Watches(&corev1.Secret{}, secretEventHandler(r.Client)).
 		Watches(&corev1.Service{}, serviceEventHandler(r.Client)).
-		Named(ctrlName).
-		Complete(r)
+		Named(ctrlName)
+
+	for _, retriever := range r.TargetRetrievers {
+		retriever.SetupWithController(b)
+	}
+
+	return b.Complete(r)
 }
 
 // secretEventHandler returns all ingress classes that have at least one ingress that references the given secret.
@@ -142,26 +142,6 @@ func ingressClassRequestsForReferencingIngresses(ctx context.Context, c client.C
 	return reqs
 }
 
-func nodeEventHandler(c client.Client) handler.EventHandler {
-	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, _ client.Object) []ctrl.Request {
-		ingressClassList := &networkingv1.IngressClassList{}
-		err := c.List(ctx, ingressClassList)
-		if err != nil {
-			return nil
-		}
-		requestList := []ctrl.Request{}
-		for i := range ingressClassList.Items {
-			if ingressClassList.Items[i].Spec.Controller != controllerName {
-				continue
-			}
-			requestList = append(requestList, ctrl.Request{
-				NamespacedName: client.ObjectKeyFromObject(&ingressClassList.Items[i]),
-			})
-		}
-		return requestList
-	})
-}
-
 func ingressEventHandler(c client.Client) handler.EventHandler {
 	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o client.Object) []ctrl.Request {
 		ingress, ok := o.(*networkingv1.Ingress)
@@ -185,34 +165,6 @@ func ingressEventHandler(c client.Client) handler.EventHandler {
 			},
 		}
 	})
-}
-
-func nodePredicate() predicate.Predicate {
-	return predicate.Funcs{
-		CreateFunc: func(_ event.CreateEvent) bool {
-			return true
-		},
-		UpdateFunc: func(e event.UpdateEvent) bool {
-			oldNode, ok := e.ObjectOld.(*corev1.Node)
-			if !ok {
-				return false
-			}
-			newNode, ok := e.ObjectNew.(*corev1.Node)
-			if !ok {
-				return false
-			}
-
-			return !reflect.DeepEqual(oldNode.Status.Addresses, newNode.Status.Addresses) ||
-				!reflect.DeepEqual(kubeutil.GetTaint(oldNode, spec.TaintToBeDeleted), kubeutil.GetTaint(newNode, spec.TaintToBeDeleted)) ||
-				!reflect.DeepEqual(kubeutil.GetNodeCondition(oldNode, spec.ConditionNodeTermination), kubeutil.GetNodeCondition(newNode, spec.ConditionNodeTermination))
-		},
-		DeleteFunc: func(_ event.DeleteEvent) bool {
-			return true
-		},
-		GenericFunc: func(_ event.GenericEvent) bool {
-			return true
-		},
-	}
 }
 
 func ingressClassPredicate() predicate.Predicate {
