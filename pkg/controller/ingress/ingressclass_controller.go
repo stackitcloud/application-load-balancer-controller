@@ -9,6 +9,7 @@ import (
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress/diff"
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress/spec"
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress/targets"
+	"github.com/stackitcloud/application-load-balancer-controller/pkg/kubeutil/index"
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/stackit"
 	stackitconfig "github.com/stackitcloud/application-load-balancer-controller/pkg/stackit/config"
 	albsdk "github.com/stackitcloud/stackit-sdk-go/services/alb/v2api"
@@ -169,7 +170,7 @@ func (r *IngressClassReconciler) updateStatus(
 
 func (r *IngressClassReconciler) getIngressesForIngressClass(ctx context.Context, ingressClass *networkingv1.IngressClass) ([]networkingv1.Ingress, error) {
 	ingresses := networkingv1.IngressList{}
-	if err := r.Client.List(ctx, &ingresses, client.MatchingFields{fieldIndexIngressClass: ingressClass.Name}); err != nil {
+	if err := r.Client.List(ctx, &ingresses, client.MatchingFields{index.FieldIndexIngressClass: ingressClass.Name}); err != nil {
 		return nil, err
 	}
 	return ingresses.Items, nil

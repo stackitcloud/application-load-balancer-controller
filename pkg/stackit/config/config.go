@@ -5,6 +5,7 @@ import (
 	"os"
 	"regexp"
 
+	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress/spec"
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
@@ -26,7 +27,7 @@ type ALBConfig struct {
 }
 type ApplicationLoadBalancerOpts struct {
 	NetworkID          string            `yaml:"networkId"`
-	DefaultNetworkMode string            `yaml:"defaultNetworkMode`
+	DefaultNetworkMode string            `yaml:"defaultNetworkMode"`
 	ExtraLabels        map[string]string `yaml:"extraLabels"`
 }
 
@@ -51,7 +52,11 @@ func ReadALBConfigFromFile(path string) (ALBConfig, error) {
 		return ALBConfig{}, err
 	}
 
-	config := ALBConfig{}
+	config := ALBConfig{
+		ApplicationLoadBalancer: ApplicationLoadBalancerOpts{
+			DefaultNetworkMode: spec.NetworkModeNodePort,
+		},
+	}
 	err = yaml.Unmarshal(content, &config)
 	if err != nil {
 		return ALBConfig{}, err

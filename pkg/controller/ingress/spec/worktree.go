@@ -54,15 +54,6 @@ type WorkTreeALB struct {
 	existingALB *albsdk.LoadBalancer
 }
 
-func (t *WorkTreeALB) targetRetrieverForIngress(ingClass *networkingv1.IngressClass, ing *networkingv1.Ingress) (targets.Retriever, error) {
-	networkMode := parseNetworkMode(ingClass, ing, t.defaultNetworkMode)
-	retriever, ok := t.targetRetriever[networkMode]
-	if !ok {
-		return nil, fmt.Errorf("unknown network mode %s", networkMode)
-	}
-	return retriever, nil
-}
-
 type workTreeListener struct {
 	hosts    map[string]*workTreeHost
 	protocol albsdk.ListenerProtocol
@@ -304,7 +295,7 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 					ruleIndex: ruleIndex, pathIndex: pathIndex,
 				}
 
-				tr, err := tree.targetRetrieverForIngress(ingressClass, ingress)
+				targetRetriever, err := tree.targetRetrieverForIngress(ingressClass, ingress)
 				if err != nil {
 					errors = append(errors, ErrorEvent{
 						Ingress:     ingress,
@@ -312,7 +303,7 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 					})
 					continue
 				}
-				targetPool, e := buildTargetPool(ctx, tree, ingressClass, tr, ingress, ruleIndex, path, pathIndex, servicesMap)
+				targetPool, e := buildTargetPool(ctx, tree, ingressClass, targetRetriever, ingress, ruleIndex, path, pathIndex, servicesMap)
 				errors = append(errors, e...)
 				if targetPool == nil {
 					continue // If the target pool is invalid we do not add any rules.
@@ -342,15 +333,24 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 }
 
 func parseNetworkMode(ingressClass *networkingv1.IngressClass, ingress *networkingv1.Ingress, defaultMode string) string {
-	networkMode, ok := ingressClass.Annotations[AnnotationNetworkMode]
+	networkMode, ok := ingress.Annotations[AnnotationNetworkMode]
 	if !ok {
-		networkMode, ok = ingress.Annotations[AnnotationNetworkMode]
+		networkMode, ok = ingressClass.Annotations[AnnotationNetworkMode]
 		if !ok {
 			return defaultMode
 		}
 	}
 
 	return networkMode
+}
+
+func (t *WorkTreeALB) targetRetrieverForIngress(ingClass *networkingv1.IngressClass, ing *networkingv1.Ingress) (targets.Retriever, error) {
+	networkMode := parseNetworkMode(ingClass, ing, t.defaultNetworkMode)
+	retriever, ok := t.targetRetriever[networkMode]
+	if !ok {
+		return nil, fmt.Errorf("unknown network mode %s", networkMode)
+	}
+	return retriever, nil
 }
 
 func parseExternalIP(ingressClass *networkingv1.IngressClass) (string, error) {
@@ -504,7 +504,7 @@ func buildTargetPool( //nolint:gocyclo,funlen // TODO: Make function easier?!
 		return nil, errors
 	}
 
-	targets, err := targetsRetriever.Targets(ctx, ingressClass, ingress)
+	targets, err := targetsRetriever.Targets(ctx, ingressClass, ingress, &path.Backend)
 	if err != nil {
 		errors = append(errors, ErrorEvent{
 			Ingress:     ingress,
@@ -513,7 +513,16 @@ func buildTargetPool( //nolint:gocyclo,funlen // TODO: Make function easier?!
 		return nil, errors
 	}
 
-	port, err := targetsRetriever.Port(&service, path.Backend.Service)
+	if len(targets) == 0 {
+		errors = append(errors, ErrorEvent{
+			Ingress:     ingress,
+			FieldPath:   field.NewPath("spec", "rules").Index(ruleIndex).Child("paths").Index(pathIndex).Child("backend", "service", "name"),
+			Description: "Service has no targets",
+		})
+		return nil, errors
+	}
+
+	port, err := targetsRetriever.Port(ctx, &service, path.Backend.Service)
 	if err != nil {
 		errors = append(errors, ErrorEvent{
 			Ingress:     ingress,

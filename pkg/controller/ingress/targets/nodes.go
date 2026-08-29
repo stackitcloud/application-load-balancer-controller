@@ -29,7 +29,7 @@ type NodeRetriever struct {
 }
 
 // Port implements [Retriever].
-func (r *NodeRetriever) Port(service *corev1.Service, ingServiceBackend *networkingv1.IngressServiceBackend) (int32, error) {
+func (r *NodeRetriever) Port(ctx context.Context, service *corev1.Service, ingServiceBackend *networkingv1.IngressServiceBackend) (int32, error) {
 	if service.Spec.Type != corev1.ServiceTypeNodePort && service.Spec.Type != corev1.ServiceTypeLoadBalancer {
 		return 0, errors.New("service is not of type NodePort or LoadBalancer")
 	}
@@ -39,7 +39,7 @@ func (r *NodeRetriever) Port(service *corev1.Service, ingServiceBackend *network
 		if port.Port == ingServiceBackend.Port.Number ||
 			(port.Name != "" && port.Name == ingServiceBackend.Port.Name) {
 			if port.NodePort == 0 {
-				return 0, errors.New("Service port doesn't have a node port")
+				return 0, errors.New("service port doesn't have a node port")
 			}
 			nodePort = port.NodePort
 		}
@@ -54,7 +54,7 @@ func (r *NodeRetriever) SetupWithController(b *builder.Builder) {
 	b.Watches(&corev1.Node{}, r.nodeEventHandler(r.Client), builder.WithPredicates(nodePredicate()))
 }
 
-func (r *NodeRetriever) Targets(ctx context.Context, _ *networkingv1.IngressClass, _ *networkingv1.Ingress) ([]albsdk.Target, error) {
+func (r *NodeRetriever) Targets(ctx context.Context, _ *networkingv1.IngressClass, _ *networkingv1.Ingress, _ *networkingv1.IngressBackend) ([]albsdk.Target, error) {
 	nodeList := corev1.NodeList{}
 	if err := r.Client.List(ctx, &nodeList); err != nil {
 		return nil, fmt.Errorf("failed to get nodes: %w", err)
@@ -86,7 +86,7 @@ func (r *NodeRetriever) getTargetsOfNodes(nodes []corev1.Node) []albsdk.Target {
 				break
 			}
 		}
-		if len(targets) >= r.targetPerPoolLimit {
+		if len(targets) >= r.TargetPerPoolLimit {
 			break
 		}
 	}
@@ -115,7 +115,7 @@ func (r *NodeRetriever) nodeEventHandler(c client.Client) handler.EventHandler {
 		}
 		requestList := []ctrl.Request{}
 		for i := range ingressClassList.Items {
-			if ingressClassList.Items[i].Spec.Controller != r.controllerName {
+			if ingressClassList.Items[i].Spec.Controller != r.ControllerName {
 				continue
 			}
 			requestList = append(requestList, ctrl.Request{

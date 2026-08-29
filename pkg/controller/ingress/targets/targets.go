@@ -10,7 +10,12 @@ import (
 )
 
 type Retriever interface {
-	Targets(context.Context, *networkingv1.IngressClass, *networkingv1.Ingress) ([]albsdk.Target, error)
-	Port(*corev1.Service, *networkingv1.IngressServiceBackend) (int32, error)
+	Targets(context.Context, *networkingv1.IngressClass, *networkingv1.Ingress, *networkingv1.IngressBackend) ([]albsdk.Target, error)
+	Port(context.Context, *corev1.Service, *networkingv1.IngressServiceBackend) (int32, error)
+}
+
+// ControllerRetriever is a Retriever that needs to be setup with a controller.
+type ControllerRetriever interface {
+	Retriever
 	SetupWithController(b *builder.Builder)
 }

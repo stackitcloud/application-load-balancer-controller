@@ -128,6 +128,10 @@ func main() {
 		TargetPerPoolLimit: spec.LimitTargetsPerPool,
 		ControllerName:     ingress.ControllerName,
 	}
+	podIPRetriever := &targets.PodIPRetriever{
+		Client:         mgr.GetClient(),
+		ControllerName: ingress.ControllerName,
+	}
 
 	if err = (&ingress.IngressClassReconciler{
 		Client:            mgr.GetClient(),
@@ -137,6 +141,7 @@ func main() {
 		ALBConfig:         config,
 		TargetRetrievers: map[string]targets.Retriever{
 			spec.NetworkModeNodePort: nodeRetriever,
+			spec.NetworkModePodIP:    podIPRetriever,
 		},
 	}).SetupWithManager(ctx, mgr, ""); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "IngressClass")
