@@ -7,6 +7,7 @@ import (
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress"
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress/spec"
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/controller/ingress/targets"
+	"github.com/stackitcloud/application-load-balancer-controller/pkg/features"
 	"github.com/stackitcloud/application-load-balancer-controller/pkg/metrics"
 	albclient "github.com/stackitcloud/application-load-balancer-controller/pkg/stackit"
 	stackitconfig "github.com/stackitcloud/application-load-balancer-controller/pkg/stackit/config"
@@ -67,6 +68,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Set feature gates immediately after decoding the config.
+	// Feature gates might influence the next steps, e.g., validating the config.
+	if err := features.Gate.SetFromMap(config.FeatureGates); err != nil {
+		setupLog.Error(err, "Setting feature gates")
+		os.Exit(1)
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Metrics: metricsserver.Options{
 			BindAddress: opts.metricsAddr,
@@ -123,14 +131,19 @@ func main() {
 
 	ctx := ctrl.SetupSignalHandler()
 
-	nodeRetriever := &targets.NodeRetriever{
-		Client:             mgr.GetClient(),
-		TargetPerPoolLimit: spec.LimitTargetsPerPool,
-		ControllerName:     ingress.ControllerName,
+	targetRetrievers := map[string]targets.Retriever{
+		spec.NetworkModeNodePort: &targets.NodeRetriever{
+			Client:             mgr.GetClient(),
+			TargetPerPoolLimit: spec.LimitTargetsPerPool,
+			ControllerName:     ingress.ControllerName,
+		},
 	}
-	podIPRetriever := &targets.PodIPRetriever{
-		Client:         mgr.GetClient(),
-		ControllerName: ingress.ControllerName,
+
+	if features.Gate.Enabled(features.PodIPNetworkMode) {
+		targetRetrievers[spec.NetworkModePodIP] = &targets.PodIPRetriever{
+			Client:         mgr.GetClient(),
+			ControllerName: ingress.ControllerName,
+		}
 	}
 
 	if err = (&ingress.IngressClassReconciler{
@@ -139,10 +152,7 @@ func main() {
 		ALBClient:         albClient,
 		CertificateClient: certificateClient,
 		ALBConfig:         config,
-		TargetRetrievers: map[string]targets.Retriever{
-			spec.NetworkModeNodePort: nodeRetriever,
-			spec.NetworkModePodIP:    podIPRetriever,
-		},
+		TargetRetrievers:  targetRetrievers,
 	}).SetupWithManager(ctx, mgr, ""); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "IngressClass")
 		os.Exit(1)

@@ -24,6 +24,7 @@ type APIEndpoints struct {
 type ALBConfig struct {
 	Global                  GlobalOpts                  `yaml:"global"`
 	ApplicationLoadBalancer ApplicationLoadBalancerOpts `yaml:"applicationLoadBalancer"`
+	FeatureGates            map[string]bool             `yaml:"featureGates,omitempty"`
 }
 type ApplicationLoadBalancerOpts struct {
 	NetworkID          string            `yaml:"networkId"`
