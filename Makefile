@@ -7,6 +7,9 @@ export REPO                 := ghcr.io/stackitcloud
 VERSION 					?= $(shell git describe --dirty --tags --match='v*' 2>/dev/null || git rev-parse --short HEAD)
 export TAG                  := $(VERSION)
 IS_DEV                      ?= true
+GOOS ?= $(shell uname -s | tr "[:upper:]" "[:lower:]")
+GOARCH ?= $(shell uname -m)
+LDFLAGS ?= "-s -w"
 
 ifeq ($(IS_DEV),true)
 REPO_POSTFIX                := -dev
@@ -25,6 +28,16 @@ all: verify
 include ./hack/tools.mk
 
 export PUSH ?= false
+
+build: ensure-bin-dir
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
+		-trimpath \
+		-ldflags $(LDFLAGS) \
+		-o bin/ \
+		./cmd/application-load-balancer-controller/
+
+ensure-bin-dir:
+	@mkdir bin || true
 
 .PHONY: images
 images: $(KO)

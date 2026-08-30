@@ -1,6 +1,7 @@
 .vscode
 .idea
 /dev
+/bin
 /secrets
 /hack/tools/bin/*
 !/hack/tools/bin/.gitkeep
