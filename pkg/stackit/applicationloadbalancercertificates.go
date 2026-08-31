@@ -28,7 +28,9 @@ func NewCertClient(cl *certsdk.APIClient) (CertificatesClient, error) {
 }
 
 func (cl certClient) GetCertificate(ctx context.Context, projectID, region, name string) (*certsdk.GetCertificateResponse, error) {
-	cert, err := cl.client.DefaultAPI.GetCertificate(ctx, projectID, region, name).Execute()
+	cert, err := execute(ctx, func(ctx context.Context) (*certsdk.GetCertificateResponse, error) {
+		return cl.client.DefaultAPI.GetCertificate(ctx, projectID, region, name).Execute()
+	})
 	if isOpenAPINotFound(err) {
 		return cert, fmt.Errorf("%w: %w", ErrorNotFound, err)
 	}
@@ -36,14 +38,19 @@ func (cl certClient) GetCertificate(ctx context.Context, projectID, region, name
 }
 
 func (cl certClient) DeleteCertificate(ctx context.Context, projectID, region, name string) error {
-	_, err := cl.client.DefaultAPI.DeleteCertificate(ctx, projectID, region, name).Execute()
+	_, err := execute(ctx, func(ctx context.Context) (map[string]any, error) {
+		return cl.client.DefaultAPI.DeleteCertificate(ctx, projectID, region, name).Execute()
+	})
+
 	return err
 }
 
 func (cl certClient) CreateCertificate(
 	ctx context.Context, projectID, region string, certificate *certsdk.CreateCertificatePayload,
 ) (*certsdk.GetCertificateResponse, error) {
-	cert, err := cl.client.DefaultAPI.CreateCertificate(ctx, projectID, region).CreateCertificatePayload(*certificate).Execute()
+	cert, err := execute(ctx, func(ctx context.Context) (*certsdk.GetCertificateResponse, error) {
+		return cl.client.DefaultAPI.CreateCertificate(ctx, projectID, region).CreateCertificatePayload(*certificate).Execute()
+	})
 	if isOpenAPINotFound(err) {
 		return cert, fmt.Errorf("%w: %w", ErrorNotFound, err)
 	}
@@ -55,11 +62,13 @@ func (cl certClient) ListCertificate(ctx context.Context, projectID, region stri
 	var nextPage string
 	pages := 0
 	for {
-		req := cl.client.DefaultAPI.ListCertificates(ctx, projectID, region)
-		if nextPage != "" {
-			req = req.PageId(nextPage)
-		}
-		page, err := req.Execute()
+		page, err := execute(ctx, func(ctx context.Context) (*certsdk.ListCertificatesResponse, error) {
+			req := cl.client.DefaultAPI.ListCertificates(ctx, projectID, region)
+			if nextPage != "" {
+				req = req.PageId(nextPage)
+			}
+			return req.Execute()
+		})
 		if err != nil {
 			return nil, err
 		}
