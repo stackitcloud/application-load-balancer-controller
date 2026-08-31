@@ -7,7 +7,7 @@ ARCH := $(shell uname -m)
 # renovate: datasource=github-releases depName=incu6us/goimports-reviser
 GOIMPORTS_REVISER_VERSION ?= v3.12.6
 # renovate: datasource=github-releases depName=golangci/golangci-lint
-GOLANGCI_LINT_VERSION ?= v2.13.1
+GOLANGCI_LINT_VERSION ?= v2.13.2
 # renovate: datasource=github-releases depName=ko-build/ko
 KO_VERSION ?= v0.19.1
 # use controller-runtime version from go.mod
