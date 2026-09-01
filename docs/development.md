@@ -104,3 +104,63 @@ Run the following command from the root of the repository:
 ```bash
 make verify
 ```
+
+## Testing STACKIT ALB Ingress Scenarios
+
+The `../example-ingress/` directory contains a set of test manifests to verify the routing capabilities of the ALB controller.
+
+These manifests deploy an `IngressClass` (which provisions the ALB) along with several deployments using the `podinfo` image. Each deployment is configured to return a unique JSON message, making it easy to identify which backend processed your request.
+
+### Deploy the Examples
+
+You can apply the entire directory at once. The numbering ensures the `IngressClass` is created first, followed by the specific routing scenarios:
+
+```bash
+kubectl apply -f docs/example-ingress/
+```
+
+The deployed scenarios include:
+* `1_ingress-path.yaml`: Path-based routing (`/path1` vs `/path2` on `example.com`).
+* `2_ingress-host.yaml`: Host-based routing (`alb.example.com`).
+* `3_ingress-port.yaml`: Custom ALB listener ports (`port.example.com:8080`).
+* `4_ingress-prio.yaml`: Rule evaluation priority (ensuring `prio.example.com` routes to the higher priority backend).
+* `5_ingress-secure.yaml`: TLS termination using a dynamically generated self-signed certificate (`secure.example.com`).
+
+### Retrieve the ALB IP
+
+Wait a few moments for the controller to provision the load balancer and assign a public IP address, then export it to an environment variable:
+
+```bash
+export ALB_IP=$(kubectl get ingress ing-alb-example -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+echo "ALB IP is: $ALB_IP"
+```
+
+### Verify Routing (No DNS Required)
+
+You can test all routing rules without creating actual DNS records by using `curl` with the `--resolve` flag. This forces `curl` to route the traffic to your ALB's IP while preserving the correct `Host` header and SNI (Server Name Indication) required for TLS handshakes.
+
+```bash
+# 1. Path-based routing
+curl -s -H "Host: example.com" http://$ALB_IP/path1
+curl -s -H "Host: example.com" http://$ALB_IP/path2
+
+# 2. Host-based routing
+curl -s -H "Host: alb.example.com" http://$ALB_IP/
+
+# 3. Custom Port (8080)
+curl -s -H "Host: port.example.com:8080" http://$ALB_IP:8080/
+
+# 4. Priority Evaluation (Should return the HIGHER priority app)
+curl -s -H "Host: prio.example.com" http://$ALB_IP/
+
+# 5. Secure/TLS Endpoint (Using -k to bypass local validation of the self-signed cert)
+curl -s -k -H "Host: secure.example.com" https://$ALB_IP/
+```
+
+### 4. Cleanup
+
+To tear down the tests, simply delete everything again:
+
+```bash
+kubectl delete -f docs/example-ingress/
+```

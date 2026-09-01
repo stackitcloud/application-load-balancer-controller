@@ -1,0 +1,105 @@
+# Example of multiple Ingresses with the same host and different path
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ing-example-path1
+spec:
+  ingressClassName: stackit-alb
+  rules:
+  - host: example.com
+    http:
+      paths:
+      - path: /path1
+        pathType: Prefix
+        backend:
+          service:
+            name: svc-example-path1
+            port:
+              number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ing-example-path2
+spec:
+  ingressClassName: stackit-alb
+  rules:
+  - host: example.com
+    http:
+      paths:
+      - path: /path2
+        pathType: Prefix
+        backend:
+          service:
+            name: svc-example-path2
+            port:
+              number: 80
+---
+# Deployment, Service for the example
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-example-path1
+spec:
+  selector:
+    matchLabels:
+      app: app-example-path1
+  template:
+    metadata:
+      labels:
+        app: app-example-path1
+    spec:
+      containers:
+      - name: podinfo
+        image: ghcr.io/stefanprodan/podinfo
+        env:
+        - name: PODINFO_UI_MESSAGE
+          value: Hello from example.com/path1
+        - name: PODINFO_PREFIX
+          value: /path1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-example-path1
+spec:
+  type: NodePort
+  selector:
+    app: app-example-path1
+  ports:
+  - port: 80
+    targetPort: 9898
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-example-path2
+spec:
+  selector:
+    matchLabels:
+      app: app-example-path2
+  template:
+    metadata:
+      labels:
+        app: app-example-path2
+    spec:
+      containers:
+      - name: podinfo
+        image: ghcr.io/stefanprodan/podinfo
+        env:
+        - name: PODINFO_UI_MESSAGE
+          value: Hello from example.com/path2
+        - name: PODINFO_PREFIX
+          value: /path2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-example-path2
+spec:
+  type: NodePort
+  selector:
+    app: app-example-path2
+  ports:
+  - port: 80
+    targetPort: 9898

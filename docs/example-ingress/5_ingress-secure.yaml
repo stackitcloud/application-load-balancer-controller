@@ -1,0 +1,102 @@
+# Example of an Ingress with a self singed certificate
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ing-secure
+  annotations:
+    alb.stackit.cloud/https-only: "true"
+spec:
+  ingressClassName: stackit-alb
+  tls:
+  - hosts:
+    - secure.example.com
+    secretName: self-signed-cert
+  rules:
+  - host: secure.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: svc-secure
+            port:
+              number: 80
+---
+# ServiceAccount, RBAC, Deployment, Service for the example
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cert-generator-sa
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cert-generator-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - get
+  - patch
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cert-generator-binding
+subjects:
+- kind: ServiceAccount
+  name: cert-generator-sa
+roleRef:
+  kind: Role
+  name: cert-generator-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-secure
+spec:
+  selector:
+    matchLabels:
+      app: app-secure
+  template:
+    metadata:
+      labels:
+        app: app-secure
+    spec:
+      serviceAccountName: cert-generator-sa
+      initContainers:
+      - name: generate-tls-secret
+        image: bitnami/kubectl:latest
+        command:
+        - /bin/sh
+        - -c
+        args:
+        - |
+          echo "Generating self-signed cert..."
+          openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /tmp/tls.key -out /tmp/tls.crt -subj "/CN=secure.example.com"
+          echo "Creating TLS secret..."
+          kubectl create secret tls self-signed-cert --cert=/tmp/tls.crt --key=/tmp/tls.key --dry-run=client -o yaml | kubectl apply -f -
+      containers:
+      - name: podinfo
+        image: ghcr.io/stefanprodan/podinfo
+        env:
+        - name: PODINFO_UI_MESSAGE
+          value: Hello from secure.example.com via HTTPS
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-secure
+spec:
+  type: NodePort
+  selector:
+    app: app-secure
+  ports:
+  - port: 80
+    targetPort: 9898
