@@ -22,8 +22,10 @@ func execute[T any](ctx context.Context, call func(context.Context) (T, error)) 
 	err = wrapError(err, "trace-id", traceID)
 
 	// Some APIs like IaaS have a requestID which we can add if available.
-	requestID := httpResp.Header.Get("X-Request-Id")
-	err = wrapError(err, "request-id", requestID)
+	if httpResp != nil {
+		requestID := httpResp.Header.Get("X-Request-Id")
+		err = wrapError(err, "request-id", requestID)
+	}
 
 	return resp, err
 }
