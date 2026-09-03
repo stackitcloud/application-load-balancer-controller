@@ -1,0 +1,9 @@
+# Example of an IngressClass
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: stackit-alb
+  annotations:
+    alb.stackit.cloud/network-mode: NodePort
+spec:
+  controller: stackit.cloud/alb-ingress

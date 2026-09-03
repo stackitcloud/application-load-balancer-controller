@@ -1,0 +1,103 @@
+# Example of multiple Ingresses with the same host but different priorities
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ing-prio-low
+spec:
+  ingressClassName: stackit-alb
+  rules:
+  - host: prio.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: svc-prio-low
+            port:
+              number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ing-prio-high
+  annotations:
+    alb.stackit.cloud/priority: "100"
+spec:
+  ingressClassName: stackit-alb
+  rules:
+  - host: prio.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: svc-prio-high
+            port:
+              number: 80
+---
+# Deployment, Service for the example
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-prio-low
+spec:
+  selector:
+    matchLabels:
+      app: app-prio-low
+  template:
+    metadata:
+      labels:
+        app: app-prio-low
+    spec:
+      containers:
+      - name: podinfo
+        image: ghcr.io/stefanprodan/podinfo
+        env:
+        - name: PODINFO_UI_MESSAGE
+          value: Hello from prio.example.com (LOWER priority)
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-prio-low
+spec:
+  type: NodePort
+  selector:
+    app: app-prio-low
+  ports:
+  - port: 80
+    targetPort: 9898
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-prio-high
+spec:
+  selector:
+    matchLabels:
+      app: app-prio-high
+  template:
+    metadata:
+      labels:
+        app: app-prio-high
+    spec:
+      containers:
+      - name: podinfo
+        image: ghcr.io/stefanprodan/podinfo
+        env:
+        - name: PODINFO_UI_MESSAGE
+          value: Hello from prio.example.com (HIGHER priority)
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-prio-high
+spec:
+  type: NodePort
+  selector:
+    app: app-prio-high
+  ports:
+  - port: 80
+    targetPort: 9898

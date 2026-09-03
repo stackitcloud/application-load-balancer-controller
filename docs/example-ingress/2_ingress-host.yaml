@@ -1,0 +1,51 @@
+# Example of an Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ing-alb-example
+spec:
+  ingressClassName: stackit-alb
+  rules:
+  - host: alb.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: svc-alb-example
+            port:
+              number: 80
+---
+# Deployment, Service for the example
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-alb-example
+spec:
+  selector:
+    matchLabels:
+      app: app-alb-example
+  template:
+    metadata:
+      labels:
+        app: app-alb-example
+    spec:
+      containers:
+      - name: podinfo
+        image: ghcr.io/stefanprodan/podinfo
+        env:
+        - name: PODINFO_UI_MESSAGE
+          value: Hello from alb.example.com
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-alb-example
+spec:
+  type: NodePort
+  selector:
+    app: app-alb-example
+  ports:
+  - port: 80
+    targetPort: 9898

@@ -26,6 +26,10 @@ include ./hack/tools.mk
 
 export PUSH ?= false
 
+.PHONY: run
+run:
+	go run cmd/application-load-balancer-controller/main.go
+
 .PHONY: images
 images: $(KO)
 	KO_DOCKER_REPO=$(REPO)/$(NAME)$(REPO_POSTFIX) $(KO) build --push=$(PUSH) \
