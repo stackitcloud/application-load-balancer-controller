@@ -10,7 +10,7 @@ require (
 	github.com/prometheus/client_model v0.6.3
 	github.com/stackitcloud/stackit-sdk-go/core v0.27.1
 	github.com/stackitcloud/stackit-sdk-go/services/alb v0.17.2
-	github.com/stackitcloud/stackit-sdk-go/services/certificates v1.9.1
+	github.com/stackitcloud/stackit-sdk-go/services/certificates v1.9.2
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.36.5
 	k8s.io/apimachinery v0.36.5
