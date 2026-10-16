@@ -128,8 +128,8 @@ github.com/stackitcloud/stackit-sdk-go/core v0.27.1 h1:k7SrqqMoHjkvHbx6n6nV3Lt51
 github.com/stackitcloud/stackit-sdk-go/core v0.27.1/go.mod h1:WU1hhxnjXw2EV7CYa1nlEvNpMiRY6CvmIOaHuL3pOaA=
 github.com/stackitcloud/stackit-sdk-go/services/alb v0.18.0 h1:xJJS4REIKMn31Agzsb7Tdmr0B/yg1cuetx8lKhzWdw8=
 github.com/stackitcloud/stackit-sdk-go/services/alb v0.18.0/go.mod h1:zEx3JFbwg1VLB9uKa2P4BA2DdypghX1FT8mbJU+msjE=
-github.com/stackitcloud/stackit-sdk-go/services/certificates v1.9.2 h1:QEKzHzVwZ80mNdoEWEZxgynACnlPfXwIlVz9b7xceR4=
-github.com/stackitcloud/stackit-sdk-go/services/certificates v1.9.2/go.mod h1:kKaS5zR+son/2J4PD05WFPDua3WtWii5tUAGHaXHE2E=
+github.com/stackitcloud/stackit-sdk-go/services/certificates v1.10.0 h1:tOEicEbpcGps3Qk0aIQjriaavVi2F3lfAYri6/bqYE8=
+github.com/stackitcloud/stackit-sdk-go/services/certificates v1.10.0/go.mod h1:YWHyORsS+pcXi5u2ogjGLI+xzOmzK2aYNhHa6670ECQ=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/objx v0.5.3 h1:jmXUvGomnU1o3W/V5h2VEradbpJDwGrzugQQvL0POH4=
 github.com/stretchr/objx v0.5.3/go.mod h1:rDQraq+vQZU7Fde9LOZLr8Tax6zZvy4kuNKF+QYS+U0=
