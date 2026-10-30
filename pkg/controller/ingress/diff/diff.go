@@ -157,8 +157,13 @@ func targetsChanged(c, d []albsdk.Target) bool {
 }
 
 func optionsChanged(current, desired *albsdk.LoadBalancerOptions) bool {
-	a := ptr.Deref(ptr.Deref(current, albsdk.LoadBalancerOptions{}).AccessControl, albsdk.LoadbalancerOptionAccessControl{})
-	b := ptr.Deref(ptr.Deref(desired, albsdk.LoadBalancerOptions{}).AccessControl, albsdk.LoadbalancerOptionAccessControl{})
+	c := ptr.Deref(current, albsdk.LoadBalancerOptions{})
+	d := ptr.Deref(desired, albsdk.LoadBalancerOptions{})
+	if ptr.Deref(c.AccessLogs, false) != ptr.Deref(d.AccessLogs, false) {
+		return true
+	}
+	a := ptr.Deref(c.AccessControl, albsdk.LoadbalancerOptionAccessControl{})
+	b := ptr.Deref(d.AccessControl, albsdk.LoadbalancerOptionAccessControl{})
 	// The SDK considers nil and empty slices equal. slices.Equal does the same.
 	return !slices.Equal(a.AllowedSourceRanges, b.AllowedSourceRanges)
 }
