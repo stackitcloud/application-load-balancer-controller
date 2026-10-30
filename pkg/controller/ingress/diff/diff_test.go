@@ -253,6 +253,58 @@ var _ = DescribeTable("UpdateNeeded",
 		},
 		false,
 	),
+	Entry("access logs enabled",
+		&albsdk.LoadBalancer{
+			Options: &albsdk.LoadBalancerOptions{
+				AccessLogs: new(false),
+			},
+		},
+		&albsdk.UpdateLoadBalancerPayload{
+			Options: &albsdk.LoadBalancerOptions{
+				AccessLogs: new(true),
+			},
+		},
+		true,
+	),
+	Entry("access logs disabled",
+		&albsdk.LoadBalancer{
+			Options: &albsdk.LoadBalancerOptions{
+				AccessLogs: new(true),
+			},
+		},
+		&albsdk.UpdateLoadBalancerPayload{
+			Options: &albsdk.LoadBalancerOptions{
+				AccessLogs: new(false),
+			},
+		},
+		true,
+	),
+	Entry("access logs explicitly disabled vs unspecified",
+		&albsdk.LoadBalancer{
+			Options: &albsdk.LoadBalancerOptions{
+				AccessLogs: nil,
+			},
+		},
+		&albsdk.UpdateLoadBalancerPayload{
+			Options: &albsdk.LoadBalancerOptions{
+				AccessLogs: new(false),
+			},
+		},
+		false,
+	),
+	Entry("access logs unchanged when enabled",
+		&albsdk.LoadBalancer{
+			Options: &albsdk.LoadBalancerOptions{
+				AccessLogs: new(true),
+			},
+		},
+		&albsdk.UpdateLoadBalancerPayload{
+			Options: &albsdk.LoadBalancerOptions{
+				AccessLogs: new(true),
+			},
+		},
+		false,
+	),
 	Entry("service plan changed",
 		&albsdk.LoadBalancer{
 			PlanId: new("p10"),
