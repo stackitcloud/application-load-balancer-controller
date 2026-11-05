@@ -66,6 +66,10 @@ const (
 	// AnnotationAllowedSourceRanges accept a comma-separated list of IP ranges. E.g. 10.0.0.0/24,1.2.3.4/32.
 	// Can be set on IngressClass and applies to all ports.
 	AnnotationAllowedSourceRanges = "alb.stackit.cloud/allowed-source-ranges"
+
+	// AnnotationAccessLogs If true, enables access logs on the application load balancer.
+	// Can be set on IngressClass.
+	AnnotationAccessLogs = "alb.stackit.cloud/access-logs"
 )
 
 // GetAnnotation retrieves an annotation value from objects.

@@ -40,6 +40,7 @@ type WorkTreeALB struct {
 	planID        string
 	waf           string
 	accessControl *albsdk.LoadbalancerOptionAccessControl
+	accessLogs    bool
 	internalLB    bool
 	externalIP    string
 
@@ -146,10 +147,16 @@ func BuildTree( //nolint:gocyclo,funlen // Breaking up this function won't make 
 		return nil, nil, fmt.Errorf("failed to parse annotation %s: %w", AnnotationInternal, err)
 	}
 
+	accessLogs, err := GetAnnotation(AnnotationAccessLogs, false, ingressClass)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to parse annotation %s: %w", AnnotationAccessLogs, err)
+	}
+
 	tree := &WorkTreeALB{
 		ingressClass: ingressClass,
 		planID:       planID,
 		waf:          ingressClass.Annotations[AnnotationWAFName],
+		accessLogs:   accessLogs,
 		internalLB:   internalLB,
 		externalIP:   externalIP,
 
@@ -796,6 +803,7 @@ func (t *WorkTreeALB) ToCreatePayload( //nolint:gocyclo,funlen // Breaking up th
 		},
 		ExternalAddress: externalAddress,
 		Options: &albsdk.LoadBalancerOptions{
+			AccessLogs:         new(t.accessLogs),
 			EphemeralAddress:   ephemeralAddress,
 			AccessControl:      t.accessControl,
 			PrivateNetworkOnly: new(t.internalLB),
