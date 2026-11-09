@@ -540,6 +540,37 @@ var _ = Describe("WorkTreeALB", func() {
 		Expect(create.Options.EphemeralAddress).To(HaveValue(BeFalse()))
 	})
 
+	It("should enable access logs if annotation is true and default to false when unset", func() {
+		treeEnabled, errs, err := BuildTree(
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationNetworkMode: NetworkModeNodePort,
+						AnnotationAccessLogs:  "true",
+					},
+				},
+			}, nil, nil, nil, nil, nil,
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(errs).To(BeEmpty())
+		createEnabled := treeEnabled.ToCreatePayload(nil, "network-id", "region", nil)
+		Expect(createEnabled.Options.AccessLogs).To(HaveValue(BeTrue()))
+
+		treeDefault, errs, err := BuildTree(
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationNetworkMode: NetworkModeNodePort,
+					},
+				},
+			}, nil, nil, nil, nil, nil,
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(errs).To(BeEmpty())
+		createDefault := treeDefault.ToCreatePayload(nil, "network-id", "region", nil)
+		Expect(createDefault.Options.AccessLogs).To(HaveValue(BeFalse()))
+	})
+
 	It("should set ALB to static if annotation contains IP", func() {
 		tree, errs, err := BuildTree(
 			&networkingv1.IngressClass{
@@ -1265,6 +1296,10 @@ var _ = Describe("WorkTreeALB", func() {
 		Entry("internal LB - false", AnnotationInternal, "false", ""),
 		Entry("internal LB - invalid", AnnotationInternal, "maybe",
 			`failed to parse annotation alb.stackit.cloud/internal-alb: strconv.ParseBool: parsing "maybe": invalid syntax`),
+		Entry("access logs - true", AnnotationAccessLogs, "true", ""),
+		Entry("access logs - false", AnnotationAccessLogs, "false", ""),
+		Entry("access logs - invalid", AnnotationAccessLogs, "maybe",
+			`failed to parse annotation alb.stackit.cloud/access-logs: strconv.ParseBool: parsing "maybe": invalid syntax`),
 	)
 
 	DescribeTable("parsing ingress annotation", func(key, value, expectErr string) {
