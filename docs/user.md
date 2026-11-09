@@ -172,6 +172,7 @@ Configure the STACKIT Application Load Balancer using the following annotations.
 | `alb.stackit.cloud/target-pool-tls-custom-ca` | String | IngressClass, Ingress, Service | Optional | A custom certificate authority for TLS connections to targets. The value must contain a PEM-encoded certificate that is a certificate authority. |
 | `alb.stackit.cloud/target-pool-tls-skip-certificate-validation`| Boolean | IngressClass, Ingress, Service | Optional | Disables certificate validation for connections to targets. |
 | `alb.stackit.cloud/allowed-source-ranges`| String | IngressClass | Accepts a comma-separated list of IP ranges. E.g. 10.0.0.0/24,1.2.3.4/32. If unset, all IPs are allowed. |
+| `alb.stackit.cloud/access-logs` | Boolean | IngressClass | Optional | If `true`, enables per-request access logs on the ALB. Defaults to `false`. |
 
 ### Known Limitations
 
