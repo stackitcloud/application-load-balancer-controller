@@ -4,7 +4,9 @@
     'config:recommended',
     'github>stackitcloud/ske-ci-infra//config/renovate/ske.json5',
   ],
-  dependencyDashboard: true,
+  dependencyDashboard: {
+    enabled: true,
+  },
   postUpdateOptions: [
     'gomodTidy',
   ],
