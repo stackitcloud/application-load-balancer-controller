@@ -676,7 +676,7 @@ func (t *WorkTreeALB) GetUnusedCertificates(existingCerts map[CertificateFingerp
 // Certificates that are referenced in t but missing in certificateIDMap are not included in the payload.
 //
 // All lists in the update payload are sorted to simplify change detection.
-func (t *WorkTreeALB) ToCreatePayload( //nolint:gocyclo,funlen // Breaking up this function won't make it much simpler.
+func (t *WorkTreeALB) ToCreatePayload( //nolint:funlen // Breaking up this function won't make it much simpler.
 	certificateIDMap map[CertificateFingerprint]string,
 	networkID string,
 	region string,
@@ -756,18 +756,6 @@ func (t *WorkTreeALB) ToCreatePayload( //nolint:gocyclo,funlen // Breaking up th
 		})
 	}
 	sortListeners(listeners)
-
-	if len(listeners) == 0 {
-		// The ALB doesn't allow zero listeners. To already create it we create an empty listener on port 80.
-		listeners = append(listeners, albsdk.Listener{
-			Name:     new(fmt.Sprintf("dummy-port-%d", 80)),
-			Protocol: new(albsdk.LISTENERPROTOCOL_PROTOCOL_HTTP),
-			Port:     new(int32(80)),
-			Http: &albsdk.ProtocolOptionsHTTP{
-				Hosts: []albsdk.HostConfig{},
-			},
-		})
-	}
 
 	targetPools := []albsdk.TargetPool{}
 	for _, targetPool := range t.targetPools {

@@ -10,7 +10,7 @@ To expose an application, you need to deploy three core resources: an IngressCla
 
 Creating an IngressClass provisions the managed ALB instance. By default, the ALB is assigned a public ephemeral IP address, unless you configure it as an internal ALB or assign a pre-existing static IP via annotations (see [Annotations](#configuration)).
 
-If no Ingress resources are currently linked to this class, the ALB acts as an empty listener that returns an HTTP 404 Not Found.
+If no Ingress resources are currently linked to this class, an empty ALB without listeners is created.
 
 You must include the `alb.stackit.cloud/network-mode: "NodePort"` annotation on the IngressClass. This is mandatory because it tells the ALB how to reach your cluster, instructing the load balancer to route incoming traffic directly to the node ports on your cluster's worker nodes. At the moment, `NodePort` is the only supported network mode.
 
@@ -80,7 +80,7 @@ The annotation `kubernetes.io/ingress.class` is not supported. Use `.spec.ingres
 
 The controller automatically merges all Ingress resources that reference the same IngressClass onto a single, shared ALB instance. To provision completely isolated ALBs (for example, to separate public and internal traffic or to assign different static IPs) you must create a distinct IngressClass for each one.
 
-If you delete all Ingress resources associated with a specific class, the controller deliberately does not delete the underlying ALB infrastructure. Instead, it transitions the ALB into an empty state that returns HTTP 404s. This behavior preserves your allocated IP address and prevents unnecessary infrastructure recreation delays. To completely delete the ALB and release its associated resources, you must delete the IngressClass.
+If you delete all Ingress resources associated with a specific class, the controller deliberately does not delete the underlying ALB infrastructure. Instead, it transitions the ALB into an empty state without listeners. This behavior preserves your allocated IP address and prevents unnecessary infrastructure recreation delays. To completely delete the ALB and release its associated resources, you must delete the IngressClass.
 
 ### Rule precedence
 
@@ -193,13 +193,6 @@ With externalTrafficPolicy=Local, this could cause zero targets to be available.
 The application load balancer controller currently does not support the `defaultBackend` field on Ingress resources.
 Customers should avoid relying on this feature as that field will be ignored during ALB reconciliation.
 This implies that ingresses that contain rules but no paths will also be ignored.
-
-#### Dummy listener for empty application load balancers
-
-Currently, application load balancers require at least one listener.
-If the ingress class results in zero listeners, a dummy listener on port 80 is added to be able to create the load balancer.
-This listener always returns the HTTP status code 404.
-Common scenarios where this can happen is when there are zero ingresses or an HTTPS-only load balancer does not have any certificates yet.
 
 ### Troubleshooting
 

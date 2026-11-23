@@ -193,9 +193,12 @@ var _ = Describe("IngressClassController", func() {
 			})
 
 			// Wait until the load balancer is created.
-			Eventually(func() *albsdk.LoadBalancer {
-				return albFake.LoadBalancer(projectID, region, spec.LoadBalancerName(ingressClass))
-			}).ShouldNot(BeNil())
+			Eventually(func(g Gomega) {
+				lb := albFake.LoadBalancer(projectID, region, spec.LoadBalancerName(ingressClass))
+				g.Expect(lb).NotTo(BeNil())
+				g.Expect(lb.Listeners).To(BeEmpty())
+				g.Expect(lb.TargetPools).To(BeEmpty())
+			}).Should(Succeed())
 		})
 
 		It("should create certificate and reference it in ALB", func(ctx context.Context) {
