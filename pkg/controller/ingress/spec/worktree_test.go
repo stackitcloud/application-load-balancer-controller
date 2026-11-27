@@ -1345,6 +1345,24 @@ var _ = Describe("WorkTreeALB", func() {
 		Entry("priority - no number", AnnotationPriority, "maybe", `Invalid priority: strconv.Atoi: parsing "maybe": invalid syntax`),
 	)
 
+	It("should create an empty ALB when there are no ingresses", func() {
+		tree, errs, err := BuildTree(
+			&networkingv1.IngressClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						AnnotationNetworkMode: NetworkModeNodePort,
+					},
+				},
+			}, nil, nil, nil, nil, nil,
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(errs).To(BeEmpty())
+
+		create := tree.ToCreatePayload(nil, "network-id", "region", nil)
+		Expect(create.Listeners).To(BeEmpty())
+		Expect(create.TargetPools).To(BeEmpty())
+	})
+
 	It("should error when network mode is not specified", func() {
 		_, _, err := BuildTree(
 			&networkingv1.IngressClass{}, nil, nil, nil, nil, nil,
